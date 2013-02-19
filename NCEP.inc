@@ -34,6 +34,7 @@ dflt[GRID_STEP]=0.5
 dflt[WFC_PREDICT_H]=180
 dflt[WFC_STEP_H]=3
 dflt[GRB2_NAME_TEMPL]='<nomacro>gfs_4_{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.grb2'
+dflt[COOKED_NAME_TEMPL]='<nomacro>{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.{{OUT_EXT}}'
 dflt[OUT_FORMAT]='CSV'
 dflt[FL_ZIP_OUT]=1
 dflt[COMPRESS_CMD]='gzip -8 %OUT_FILE%'
@@ -71,12 +72,12 @@ GRID_ROWS=$( bc <<<"($MAX_LAT-$MIN_LAT)/$GRID_STEP+1" )
 
 getLatestDataTS () {
 local TS
-  TS=$(wget "$HELPER" -O - 2>/dev/null | \
+  TS=$(wget -q "$HELPER" -O - 2>/dev/null | \
    sed 's%<a href%\n&%g' | \
     sed -nr 's%^<a href="'"${HELPER//./\\.}"'\?dir=\%2Fgfs\.(20(1[2-9]|[2-9][0-9])[0-9]{6})">gfs\.\1</a>.*$%\1%p' | \
      sort -rn | head -1)
-  if ! wget "$HELPER?dir=%2Fgfs.${TS}" -O - 2>/dev/null | fgrep -q '>master</a>'; then
-   TS=$(wget "$HELPER" -O - 2>/dev/null | \
+  if ! wget -q "$HELPER?dir=%2Fgfs.${TS}" -O - 2>/dev/null | fgrep -q '>master</a>'; then
+   TS=$(wget -q "$HELPER" -O - 2>/dev/null | \
     sed 's%<a href%\n&%g' | \
      sed -nr 's%^<a href="'"${HELPER//./\\.}"'\?dir=\%2Fgfs\.(20(1[2-9]|[2-9][0-9])[0-9]{6})">gfs\.\1</a>.*$%\1%p' | \
       sort -rn | head -2 | sed '1d')
@@ -90,7 +91,7 @@ local keyOpt
 local flConvert2NetCDF=0 flDontDeleteRaw=0
 local l a=() TS
 declare -i la
-local grb2File outFile tgtPath
+local grb2File outFile
 local YMD i si
 local FE
  (( FL_CLEAN_RAW_DIR || FL_CLEAN_RAW )) && \
@@ -106,25 +107,23 @@ local FE
   la=${#a[@]}-1
   METEOPAR=${a[la-1]}
   METEOPAR_COND=${a[la]}
-  tgtPath="$GFS_RAW_PATH/${YMD}"
-  mkdir -p "${tgtPath}"
+  mkdir -p {$GFS_RAW_PATH,$GFS_CSV_PATH}/${YMD}  
   for H_DIA in ${WFC_PREDICT_H_DIA:=000..${WFC_PREDICT_H}..${WFC_STEP_H}}; do
    for si in $(eval "echo {${H_DIA}}"); do
 # si = Hours of prediction, format (ex.): 004, 015, 180  
-    grb2File="${tgtPath}/$(doMacroSubst GRB2_NAME_TEMPL)"
+    grb2File="$GFS_RAW_PATH/${YMD}/$(doMacroSubst GRB2_NAME_TEMPL)"
     if ! [[ -f $grb2File ]]; then
      [[ ${si:0:1} == '0' ]] && si=${si:1:2}
-     wget "${HELPER}?file=gfs.t${HH}z.mastergrb2f${si}&lev_${METEOPAR_COND}=on&var_${METEOPAR}=on&leftlon=${MIN_LON}&rightlon=${MAX_LON}&toplat=${MAX_LAT}&bottomlat=${MIN_LAT}&dir=%2Fgfs.${TS}%2Fmaster" \
+     wget -q "${HELPER}?file=gfs.t${HH}z.mastergrb2f${si}&lev_${METEOPAR_COND}=on&var_${METEOPAR}=on&leftlon=${MIN_LON}&rightlon=${MAX_LON}&toplat=${MAX_LAT}&bottomlat=${MIN_LAT}&dir=%2Fgfs.${TS}%2Fmaster" \
          -O "$grb2File"
      if (( $? || ( $(stat -c %s "$grb2File") == 0 ) )); then
       rm -f "$grb2File"
       continue
      fi     
     fi
-    FE=${FORMAT_EXT[${OUT_FORMAT^^}]}
-    if [[ $FE ]]; then
-     outFile=$(sed -r "s%^gfs_4_%%; s%/raw/%/cooked/%; s%\.grb2$%.${FE}%" <<<"$grb2File")
-     mkdir -p ${outFile%/*}
+    OUT_EXT=${FORMAT_EXT[${OUT_FORMAT^^}]}
+    if [[ $OUT_EXT ]]; then           
+     outFile="$GFS_CSV_PATH/${YMD}/$(doMacroSubst COOKED_NAME_TEMPL)"
      case ${OUT_FORMAT^^} in
      NETCDF)
       wgrib2 $grb2File -netcdf $outFile
