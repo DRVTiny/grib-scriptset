@@ -1,5 +1,6 @@
 #!/bin/bash -x
-source ~/bin/NCEP.inc
+GFS_CUSTOM_PARS='/etc/grib/rostov-on-don.inc'
+source ~/bin/NCEP2.inc
 if [[ $1 ]]; then
  startDate=$1
  endDate=${2:-$(getLatestDataTS)} 
