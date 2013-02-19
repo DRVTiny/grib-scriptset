@@ -1,6 +1,6 @@
-#!/bin/bash -x
+#!/bin/bash
 GFS_CUSTOM_PARS='/etc/grib/rostov-on-don.inc'
-source ~/bin/NCEP2.inc
+source ${USER_HOME:=$(getent passwd $(whoami) | cut -d: -f6)}/bin/grib-scriptset/NCEP.inc
 if [[ $1 ]]; then
  startDate=$1
  endDate=${2:-$(getLatestDataTS)} 
