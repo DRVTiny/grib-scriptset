@@ -34,10 +34,11 @@ dflt[GRID_STEP]=0.5
 dflt[WFC_PREDICT_H]=180
 dflt[WFC_STEP_H]=3
 dflt[GRB2_NAME_TEMPL]='<nomacro>gfs_4_{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.grb2'
-dflt[COOKED_NAME_TEMPL]='<nomacro>{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.{{OUT_EXT}}'
+dflt[COOKED_NAME_TEMPL]='<nomacro>gfs_4_{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.{{OUT_EXT}}'
 dflt[OUT_FORMAT]='CSV'
 dflt[FL_ZIP_OUT]=1
-dflt[COMPRESS_CMD]='gzip -8 %OUT_FILE%'
+dflt[COMPRESS_LEVEL]=8
+dflt[COMPRESS_CMD]='gzip -{{COMPRESS_LEVEL}} %OUT_FILE%'
 dflt[FL_CLEAN_RAW_DIR]=0
 dflt[FL_CLEAN_CSV_DIR]=0
 dflt[FL_CLEAN_RAW_FILE]=0
@@ -108,40 +109,48 @@ local FE
   METEOPAR=${a[la-1]}
   METEOPAR_COND=${a[la]}
   mkdir -p {$GFS_RAW_PATH,$GFS_CSV_PATH}/${YMD}  
+  
+  OUT_FORMAT=${OUT_FORMAT^^}
+  OUT_EXT=${FORMAT_EXT[${OUT_FORMAT}]}
+  [[ $OUT_EXT ]] || { 
+   echo "Sorry, we dont know, how to work with output format \"$OUT_FORMAT\" yet" >&2
+   exit 1
+  }
+  
   for H_DIA in ${WFC_PREDICT_H_DIA:=000..${WFC_PREDICT_H}..${WFC_STEP_H}}; do
    for si in $(eval "echo {${H_DIA}}"); do
 # si = Hours of prediction, format (ex.): 004, 015, 180  
     grb2File="$GFS_RAW_PATH/${YMD}/$(doMacroSubst GRB2_NAME_TEMPL)"
+
+    outFile="$GFS_CSV_PATH/${YMD}/$(doMacroSubst COOKED_NAME_TEMPL)"
+    
+    [[ -f $outFile || ( $FL_ZIP_OUT == 1 && -f $outFile.gz ) ]] && continue
+    
     if ! [[ -f $grb2File ]]; then
-     [[ ${si:0:1} == '0' ]] && si=${si:1:2}
-     wget -q "${HELPER}?file=gfs.t${HH}z.mastergrb2f${si}&lev_${METEOPAR_COND}=on&var_${METEOPAR}=on&leftlon=${MIN_LON}&rightlon=${MAX_LON}&toplat=${MAX_LAT}&bottomlat=${MIN_LAT}&dir=%2Fgfs.${TS}%2Fmaster" \
+     [[ $si =~ ^0?([0-9]{2,3})$ ]]
+     wget -q "${HELPER}?file=gfs.t${HH}z.mastergrb2f${BASH_REMATCH[1]}&lev_${METEOPAR_COND}=on&var_${METEOPAR}=on&subregion=&leftlon=${MIN_LON}&rightlon=${MAX_LON}&toplat=${MAX_LAT}&bottomlat=${MIN_LAT}&dir=%2Fgfs.${TS}%2Fmaster" \
          -O "$grb2File"
      if (( $? || ( $(stat -c %s "$grb2File") == 0 ) )); then
       rm -f "$grb2File"
       continue
      fi     
     fi
-    OUT_EXT=${FORMAT_EXT[${OUT_FORMAT^^}]}
-    if [[ $OUT_EXT ]]; then           
-     outFile="$GFS_CSV_PATH/${YMD}/$(doMacroSubst COOKED_NAME_TEMPL)"
-     case ${OUT_FORMAT^^} in
+    
+    case $OUT_FORMAT in
      NETCDF)
       wgrib2 $grb2File -netcdf $outFile
      ;;
      CSV)
-      if ! [[ -f $outFile || -f $outFile.gz ]]; then
-       wgrib2 $grb2File | \
-        wgrib2 $grb2File -i -lola $MIN_LON:$GRID_COLS:$GRID_STEP $MIN_LAT:$GRID_ROWS:$GRID_STEP $outFile spread
-      fi
+      wgrib2 $grb2File | \
+       wgrib2 $grb2File -i -lola $MIN_LON:$GRID_COLS:$GRID_STEP $MIN_LAT:$GRID_ROWS:$GRID_STEP $outFile spread
      ;;
      *) echo "Unknown output format: $OUT_FORMAT" >&2 ;;
-     esac
-     if [[ -f $outFile ]] && (( FL_ZIP_OUT )); then
-      eval "${COMPRESS_CMD//%OUT_FILE%/$outFile}"
-     fi
-    else
-     echo "Sorry, we dont know, how to work with output format \"$OUT_FORMAT\" yet" >&2
+    esac
+    if [[ -f $outFile ]] && (( FL_ZIP_OUT )); then
+     eval "${COMPRESS_CMD//%OUT_FILE%/$outFile}" && \
+      rm -f "$outFile"
     fi
+    
     (( FL_CLEAN_RAW_FILE )) && rm -f "$grb2File"
    done
   done 

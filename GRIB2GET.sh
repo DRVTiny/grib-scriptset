@@ -6,11 +6,12 @@ slf=${0##*/}
 source ${0%/*}/GRIB2DEF.inc
 pthFilterFile="$BIN/filters/fire-fcast.grep"
 fnFilter='.'
-while getopts 'f: D: d:' key; do
+while getopts 'f: D: d: g:' key; do
  case $key in
  f)    pthFilterFile="$OPTARG"		;;
  D)    fnFilter="$OPTARG"		;;
  d)    RAW_DIR="$OPTARG"		;;
+ g)    GRID_BOUND="$OPTARG"		;;
  \?|*) echo "Wrong key: -${key}"	;;
  esac
 done
@@ -26,18 +27,33 @@ rxAlreadySeen="$baseDir/daily.grib2.grep"
 mkdir -p "$baseDir"
 touch    "$rxAlreadySeen"
 
-{
- while read -r FILE; do
-    echo "$FILE" >> "$rxAlreadySeen"
-    get_inv.pl $BASEURL/$YM/$YMD/${FILE}.inv | \
-     fgrep -f "$pthFilterFile" | \
-      get_grib.pl $BASEURL/$YM/$YMD/$FILE.grb2 ${baseDir}/${FILE}.grb2 &
-    sleep 3
- done < <(
+wait4pids=''
+declare -A FILEs
+while read -r FILE; do
+   echo "$FILE" >> "$rxAlreadySeen"
+   get_inv.pl $BASEURL/$YM/$YMD/${FILE}.inv | \
+    fgrep -f "$pthFilterFile" | \
+     get_grib.pl $BASEURL/$YM/$YMD/$FILE.grb2 ${baseDir}/${FILE}.grb2 &
+   pid=$!
+   wait4pids+=" $pid"
+   FILEs[$pid]="${baseDir}/${FILE}.grb2"
+   sleep 3
+done < <(
   curl -s $BASEURL/$YM/$YMD/ | \
    sed -nr "/$fnFilter/p" | \
     sed -nr '/gfs_4_/s%^.*>(gfs_4_[0-9]{8}_[0-9]{4}_[0-9]{3})\.inv<.*$%\1%p' | \
      fgrep -v -f "$rxAlreadySeen"
-         )
-}
-exit $?
+)
+
+if [[ $GRID_BOUND ]]; then        
+ for pid in $wait4pids; do
+  wait $pid
+  wgrib2 ${FILEs[$pid]} -lola $GRID_BOUND ${FILEs[$pid]}.tmp grib && \
+   mv ${FILEs[$pid]}.tmp ${FILEs[$pid]}
+ done
+else
+ for pid in $wait4pids; do
+  wait $pid
+ done
+fi
+
