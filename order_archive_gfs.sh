@@ -1,13 +1,14 @@
 #!/bin/bash -x
-DATA_ID='ROSTOV2012_Thunder'
+DATA_ID='ROSTOV2012_Cold'
+AREA='ROSTOV_OBLAST'
 declare -A GB=(
-                [ROSTOV2012_Thunder]='36:28:0.5 39:26:0.5'
+                [ROSTOV_OBLAST]='36:28:0.5 39:26:0.5'
 )
 FF='fire-fcast'
 
 declare -A DATE=(
-		[start]='2012-05-01'
-		[end]='2012-08-31'
+		[start]='2012-02-01'
+		[end]='2012-02-29'
 )
 
 BASE_TIME='00'
@@ -27,7 +28,7 @@ for baseH in $(eval "echo $BASE_TIME"); do
    -T /store/GRIB/raw/GFS4/$DATA_ID \
    -d /store/GRIB/cooked/GFS4/$DATA_ID \
    -f $HOME/bin/filters/$FF.grep \
-   -g "${GB[$DATA_ID]}" 2>&1 | \
+   -g "${GB[$AREA]}" 2>&1 | \
     tee -a $LOG_FILE
  done
 done

@@ -37,7 +37,7 @@ nDays=$(( ( $(date -d $endDate +%s) - $(date -d $startDate +%s) )/(24*3600) + 1 
 for ((i=0; i<nDays; i++)); do
  curDate=$(date -d "$startDate +${i} day" +%Y-%m-%d)
  { [[ -d $pthDest/$curDate ]] && (( flSkipIfExists )); } && continue
- eval "${flTestOut+echo }GRIB2GET.sh -f $pthFilterFile ${fnFilter:+-D \"$fnFilter\"} ${gridBounds+-g \"$gridBounds\"} -d $pthTemp $curDate"
- eval "${flTestOut+echo }GRIB2CSV.sh -s $pthTemp -d $pthDest -G $curDate"
+ eval "${flTestOut+echo }GRIB2GET.sh -f $pthFilterFile ${fnFilter:+-D \"$fnFilter\"} -d $pthTemp $curDate"
+ eval "${flTestOut+echo }GRIB2CSV.sh -s $pthTemp -d $pthDest ${gridBounds+-g \"$gridBounds\"} $curDate"
 # rm -rf $pthTemp/$curDate
 done
