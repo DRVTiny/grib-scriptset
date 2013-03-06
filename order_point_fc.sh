@@ -1,5 +1,5 @@
 #!/bin/bash
-source /opt/scripts/functions/parex.inc
+#source /opt/scripts/functions/parex.inc
 
 eval_dinv () { 
  local d days month year
@@ -17,32 +17,41 @@ eval_dinv () {
 
 sqr_points () {
  local lat_u="$1" lon_l="$2"
- local lat_d=$(bc <<<"$lat_u-0.5")
- local lon_r=$(bc <<<"$lon_l+0.5")
- echo "$lat_u,$lon_l $lat_u,$lon_r $lat_d,$lon_l $lat_d,$lon_r"
+ local lat_d=$(( ${lat_u/./}-5 ))
+ local lon_r=$(( ${lon_l/./}+5 ))
+ lat_d=${lat_d%?}.${lat_d:$((${#lat_d}-1)):1} 
+ lon_r=${lon_r%?}.${lon_r:$((${#lon_r}-1)):1}
+ echo "$lon_l,$lat_u $lon_r,$lat_u $lon_l,$lat_d $lon_r,$lat_d"
  return 0
 }
 
-DATA_ID='ROSTOV2012_Thunder'
-nPredictHours=120
 doShowUsage () {
  cat <<EOF
 Usage:
- ${0##*/} [ -i DATA_ID ] [ -T | -y ] [-s] [-P PREDICT_HOURS] 
+ ${0##*/} [ -i DATA_ID ] [-d DEST_PATH ] [-m EMAIL_REPORT_TO ] [ -T ] [-s] [-P PREDICT_HOURS] 
 EOF
  return 0
 }
 
 unset flTestOutCmds flResetSourcePath flParallelExec
-while getopts 'ysDTi: P:' k; do
+
+TEMP_DIR='/tmp'
+DATA_ID='Rostov-On-Don'
+nPredictHours=120
+
+while getopts 'ysDTi: P: m: d:' k; do
  case $k in
-  D) set -x                  ;;
-  T) flTestOutCmds=1         ;;
-  s) flResetSourcePath=1     ;;
-  i) DATA_ID="$OPTARG"       ;;
-  P) nPredictHours="$OPTARG" ;;
+  D) set -x                   ;;
+  T) flTestOutCmds=1          ;;
+  s) flResetSourcePath=1      ;;
+  d) TEMP_DIR="${OPTARG%/}"   ;;
+  i) DATA_ID="${OPTARG// /_}"
+     DATA_ID="${DATA_ID//\//:}"
+                              ;;
+  m) emailTO="$OPTARG"	      ;;
+  P) nPredictHours="$OPTARG"  ;;
   y) (( $(fgrep processor /proc/cpuinfo | wc -l) > 1 )) && flParallelExec=1 ;;
-  *) doShowUsage; exit 1     ;;
+  *) doShowUsage; exit 1      ;;
  esac
 done
 shift $((OPTIND-1))
@@ -55,7 +64,7 @@ shift $((OPTIND-1))
 
 declare -A dblocks ul_point
 
- dblocks[default]='11.2012'
+ dblocks[default]='1-29.02.2012'
  
 # dblocks[RostovOnDon]='05.2012 06.2012 07.2012 08.2012'
 ul_point[RostovOnDon]='47.5 39.5'
@@ -75,9 +84,7 @@ ul_point[Taganrog]='47.5 38.5'
 # dblocks[Konstantinovsk]='05.2012 06.2012 07.2012 08.2012'
 ul_point[Konstantinovsk]='48.0 41.0'
 
-
-
-baseDir="/tmp/$DATA_ID"
+baseDir="$TEMP_DIR/$DATA_ID"
 if [[ -d $baseDir ]]; then
  rm -rf $baseDir/*
 else
@@ -98,10 +105,14 @@ fi
   for dblock in ${dblocks[$meteoStationID]-${dblocks[default]}}; do
    mkdir -p $baseDir/$meteoStationID/$dblock
    for day in $(eval_dinv $dblock); do
-    for pp in $(sqr_points ${ul_point[$meteoStationID]}); do
-     echo "${flTestOutCmds+$HOME/bin/point_forecast}${flResetSourcePath+ -s /store/GRIB/cooked/GFS4/${DATA_ID}} -n -d $baseDir/$meteoStationID/$dblock -H $nPredictHours ${pp/,/ } $day 0"
-    done
+    echo "${flTestOutCmds+$HOME/bin/point_forecast}${flResetSourcePath+ -s /store/GRIB/cooked/GFS4/${DATA_ID}} -n -d $baseDir/$meteoStationID/$dblock -H $nPredictHours '$(sqr_points ${ul_point[$meteoStationID]})' $day 0"
    done   
   done
  done
 } | $cmd
+
+if [[ $emailTO && -d $DATA_ID ]]; then
+ cd $TEMP_DIR
+ zip -r $DATA_ID{.zip,/}
+ mailfile.pl -f ${DATA_ID}.zip -d $emailTO -T "Meteoreport inside (ID=${DATA_ID})"
+fi
