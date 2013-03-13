@@ -78,7 +78,7 @@ for lola in $points; do
   echo -n "$lbl"
   
   mp=${LBL2MP["$lbl"]} 
-  max_pred_hours=$(ls ${src_pth}/gfs_4_${bdate}_${zz_bhours}00_*_${mp}.csv*  | cut -d_ -f5 | sort -rn | head -1)
+  max_pred_hours=$(cd ${src_pth}; ls gfs_4_${bdate}_${zz_bhours}00_*_${mp}.csv*  | cut -d_ -f5 | sort -rn | head -1)
   if [[ $max_pred_hours =~ ^0*([0-9]+)$ ]]; then
    max_pred_hours=${BASH_REMATCH[1]}
   else

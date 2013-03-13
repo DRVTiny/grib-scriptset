@@ -1,0 +1,11 @@
+#!/bin/bash
+while read f; do
+ lsof "$f" &>/dev/null || {
+  if [[ -f "$f.gz" ]] && (( $(stat -c %s "$f.gz") )); then 
+   rm -f "$f"; continue
+  elif [[ -f "$f.gz" ]]; then
+   rm -f "$f.gz"
+  fi
+  gzip -8 "$f"
+ }
+done < <(find /store/GRIB -type f -name '*.csv')
