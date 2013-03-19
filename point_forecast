@@ -1,4 +1,6 @@
 #!/bin/bash
+source /opt/scripts/functions/strings.inc
+
 doShowUsage () {
 cat <<EOF
 Usage:
@@ -98,7 +100,12 @@ for lola in $points; do
    [[ ! -f "$csvSource" && -f "${csvSource}.gz" ]] && \
     gzip -d "$csvSource.gz" 2>/dev/null
    if [[ -f "$csvSource" ]]; then
-    csv_row+=$(sed -nr "s%^${lola/,/00000,\s*}00000,\s*([^,]+),$%,\1%p" "$csvSource")
+   
+    lon=${lola%,*}; lat=${lola#*,}
+    lon=${lon#.*}$(rpad ${lon#*.} '000000')
+    lat=${lat#.*}$(rpad ${lat#*.} '000000')
+    
+    csv_row+=$(sed -nr "s%^${lon},\s*${lat},\s*([^,]+),?\s*$%,\1%p" "$csvSource")
    else
     csv_row+=',99999'
    fi
