@@ -16,10 +16,11 @@ eval_dinv () {
 }
 
 sqr_points () {
- local lat_u="$1" lon_l="$2"
+ local lat_u="$1"
  local lat_d=$(( ${lat_u/./}-5 ))
+ local lon_l="$2"
  local lon_r=$(( ${lon_l/./}+5 ))
- lat_d=${lat_d%?}.${lat_d:$((${#lat_d}-1)):1} 
+ lat_d=${lat_d%?}.${lat_d:$((${#lat_d}-1)):1}
  lon_r=${lon_r%?}.${lon_r:$((${#lon_r}-1)):1}
  echo "$lon_l,$lat_u $lon_r,$lat_u $lon_l,$lat_d $lon_r,$lat_d"
  return 0
@@ -66,23 +67,23 @@ declare -A dblocks ul_point
 
  dblocks[default]='1-29.02.2012'
  
-# dblocks[RostovOnDon]='05.2012 06.2012 07.2012 08.2012'
+ dblocks[RostovOnDon]='11-17.05.2012 1-7.07.2012' 
 ul_point[RostovOnDon]='47.5 39.5'
 
 # dblocks[Remontnoe]='05.2012 06.2012 07.2012 08.2012'
-ul_point[Remontnoe]='47.0 43.5'
+#ul_point[Remontnoe]='47.0 43.5'
 
-# dblocks[Kazanskaya]='05.2012 06.2012 07.2012 08.2012'
+ dblocks[Kazanskaya]='5-11.08.2012'
 ul_point[Kazanskaya]='50.0 41.0'
 
-# dblocks[Millerovo]='05.2012 06.2012 07.2012 08.2012'
+ dblocks[Millerovo]='18-21.08.2012'
 ul_point[Millerovo]='49.0 40.0'
 
 # dblocks[Taganrog]='05.2012 06.2012 07.2012 08.2012'
-ul_point[Taganrog]='47.5 38.5'
+#ul_point[Taganrog]='47.5 38.5'
 
 # dblocks[Konstantinovsk]='05.2012 06.2012 07.2012 08.2012'
-ul_point[Konstantinovsk]='48.0 41.0'
+#ul_point[Konstantinovsk]='48.0 41.0'
 
 baseDir="$TEMP_DIR/$DATA_ID"
 if [[ -d $baseDir ]]; then

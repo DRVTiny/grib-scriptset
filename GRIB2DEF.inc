@@ -1,20 +1,37 @@
 USER_RUN_AS='grib'
 BIN="$(getent passwd $USER_RUN_AS | cut -d':' -f6)/bin"
+FILTER_PATH="$BIN/filters"
 GRIB_BASE='/store/GRIB'
 GFS_RAW="$GRIB_BASE/raw/GFS4"
 GFS_RAW_NAMOS="$GFS_RAW/NAMOS"
 GFS_RAW_NASA="$GFS_RAW/NASA"
-GRID_BOUND=${GRID_BOUND:-36:28:0.5 40:24:0.5}
+[[ $slf =~ CSV && ${GRID_BOUND=36:28:0.5 40:24:0.5} ]]
+declare -A DEPS=(['GRIB2GET.sh']='get_inv.pl get_grib.pl')
 
 GFS_COOKED="$GRIB_BASE/cooked/GFS4"
 GFS_COOKED_CSV="$GFS_COOKED/csv"
 #http://nomads.ncdc.noaa.gov/data/gfs4/201206/20120625/gfs_4_20120625_0000_000.grb2
 BASEURL='http://nomads.ncdc.noaa.gov/data/gfs4/'
+
+chkUnresDeps () {
+ local dep errc=0 unres='' lst_deps="${DEPS[${slf=${0##*/}}]}"
+ [[ $lst_deps ]] || return 0
+ for dep in $lst_deps; do
+  which "$dep" &>/dev/null || {
+   (( errc++ ))
+   unres+=" $dep"
+  }
+ done
+ echo -n "$unres"
+ return $errc
+}
+
 chkRemoteFTPMounted () {
  mount | fgrep -q $GFS_RAW_NASA || \
   curlftpfs ftp://nomads.ncdc.noaa.gov/GFS/Grid4 $GFS_RAW_NASA
  return $?
 }
+
 getLatestDay () {
  local _last_month=$(curl -s $BASEURL | sed -nr "s%^.*<a href=\"([0-9]{6})/\">\1/</a>.*$%\1%p" | sort -rn | head -1)
  curl -s $BASEURL/${_last_month}/ | sed -nr "s%^.*<a href=\"([0-9]{8})/\">\1/</a>.*$%\1%p" | sort -rn | head -1

@@ -1,5 +1,23 @@
 #!/bin/bash
-GFS_CUSTOM_PARS='/etc/grib/rostov-on-don.inc'
+slf="${0##*/}"
+source /opt/scripts/functions/debug.func
+log_open /var/log/grib/grab_ncep.log
+ID='rostov-on-don'
+while getopts 'xA:' key; do
+ case $key in
+  A) ID="$OPTARG" ;;
+  x) flDebug=1; set -x ;; 
+  \?|*) fatal_ "Unknown key passed to me: $key"; exit 1 ;;
+ esac
+done
+shift $((OPTIND-1))
+
+GFS_CUSTOM_PARS="/etc/grib/$ID.inc"
+[[ -f $GFS_CUSTOM_PARS && -r $GFS_CUSTOM_PARS ]] || {
+ error_ "Cant read GFS_CUSTOM_PARS=$GFS_CUSTOM_PARS"
+ exit 1
+}
+
 source ${USER_HOME:=$(getent passwd $(whoami) | cut -d: -f6)}/bin/grib-scriptset/NCEP.inc
 if [[ $1 ]]; then
  startDate=$1

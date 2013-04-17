@@ -38,7 +38,7 @@ dflt[COOKED_NAME_TEMPL]='<nomacro>gfs_4_{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{M
 dflt[OUT_FORMAT]='CSV'
 dflt[FL_ZIP_OUT]=1
 dflt[COMPRESS_LEVEL]=8
-dflt[COMPRESS_CMD]='gzip -{{COMPRESS_LEVEL}} "%OUT_FILE%"'
+dflt[COMPRESS_CMD]="gzip -{{COMPRESS_LEVEL}} '%OUT_FILE%'"
 dflt[FL_CLEAN_RAW_DIR]=0
 dflt[FL_CLEAN_CSV_DIR]=0
 dflt[FL_CLEAN_RAW_FILE]=0
@@ -48,7 +48,7 @@ dflt[FL_CLEAN_CSV]=0
 # <-
 
 declare -A FORMAT_EXT=([CSV]='csv' [NETCDF]='nc' [GRIB2]='grb2')
-
+declare -A ZIP_EXT=([gzip]=gz [bzip2]=bz2 [7za]=7z [compress]=Z [zip]=zip)
 CONF_KEYS="${!dflt[@]}"
 
 for v in $CONF_KEYS; do
@@ -94,7 +94,7 @@ local l a=() TS
 declare -i la
 local grb2File outFile
 local YMD i si
-local FE
+local FE tmp_
  (( FL_CLEAN_RAW_DIR || FL_CLEAN_RAW )) && \
   { rm -rf $GFS_RAW_PATH && mkdir -p $GFS_RAW_PATH; }
  (( FL_CLEAN_CSV_DIR || FL_CLEAN_CSV )) && \
@@ -117,6 +117,8 @@ local FE
    exit 1
   }
   
+  [[ $FL_ZIP_OUT == 1 && ! $COMPRESS_EXT ]] && COMPRESS_EXT=${ZIP_EXT["${COMPRESS_CMD%%[[:space:]]*}"]-zip}
+  
   for H_DIA in ${WFC_PREDICT_H_DIA:=000..${WFC_PREDICT_H}..${WFC_STEP_H}}; do
    for si in $(eval "echo {${H_DIA}}"); do
 # si = Hours of prediction, format (ex.): 004, 015, 180  
@@ -124,7 +126,7 @@ local FE
 
     outFile="$GFS_CSV_PATH/${YMD}/$(doMacroSubst COOKED_NAME_TEMPL)"
     
-    [[ -f $outFile || ( $FL_ZIP_OUT == 1 && -f $outFile.gz ) ]] && continue
+    [[ -f $outFile || ( $FL_ZIP_OUT == 1 && -f "${outFile}.${COMPRESS_EXT}" ) ]] && continue
     
     if ! [[ -f $grb2File ]]; then
      [[ $si =~ ^0?([0-9]{2,3})$ ]]
@@ -135,22 +137,28 @@ local FE
       continue
      fi     
     fi
-    
+    tmp_=$(mktemp /tmp/XXXXXXXXXXX)
     case $OUT_FORMAT in
      NETCDF)
-      wgrib2 $grb2File -netcdf $outFile
+      wgrib2 $grb2File -netcdf ${tmp_}
      ;;
-     CSV)
+     CSV)       
       wgrib2 $grb2File | \
-       wgrib2 $grb2File -i -lola $MIN_LON:$GRID_COLS:$GRID_STEP $MIN_LAT:$GRID_ROWS:$GRID_STEP $outFile spread
+       wgrib2 $grb2File -i -lola $MIN_LON:$GRID_COLS:$GRID_STEP $MIN_LAT:$GRID_ROWS:$GRID_STEP ${tmp_} spread
      ;;
      *) echo "Unknown output format: $OUT_FORMAT" >&2 ;;
     esac
-    if [[ -f $outFile ]] && (( FL_ZIP_OUT )); then
-     eval "${COMPRESS_CMD//%OUT_FILE%/$outFile}" && \
+    if (( $(stat -c %s $tmp_) )); then
+     mv "${tmp_}" "$outFile"
+# mktemp always set access mask = 0600
+     chmod 644 "$outFile"
+     if (( FL_ZIP_OUT )) && eval "${COMPRESS_CMD//%OUT_FILE%/$outFile}"; then
+      chmod 644 "${outFile}.${COMPRESS_EXT}"
       rm -f "$outFile"
-    fi
-    
+     fi
+    else
+     rm -f "${tmp_}"
+    fi    
     (( FL_CLEAN_RAW_FILE )) && rm -f "$grb2File"
    done
   done 

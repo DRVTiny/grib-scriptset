@@ -1,13 +1,21 @@
-#!/bin/bash -x
+#!/bin/bash
 #
 #Execution time for 1 day: 4m 30s
 #
 slf=${0##*/}
+
 source ${0%/*}/GRIB2DEF.inc
+
+#if ! s=$(chkUnresDeps); then
+# { [[ $s ]] && echo "Unresolved dependencies found: \"$s\"" >&2; } || echo 'Problem while checking dependencies'
+# exit 1
+#fi
+
 pthFilterFile="$BIN/filters/fire-fcast.grep"
 fnFilter='.'
-while getopts 'f: D: d: g:' key; do
+while getopts 'f: D: d: g: x' key; do
  case $key in
+ x)    set -x				;;
  f)    pthFilterFile="$OPTARG"		;;
  D)    fnFilter="$OPTARG"		;;
  d)    RAW_DIR="$OPTARG"		;;
@@ -27,32 +35,26 @@ rxAlreadySeen="$baseDir/daily.grib2.grep"
 mkdir -p "$baseDir"
 touch    "$rxAlreadySeen"
 
-wait4pids=''
 declare -A FILEs
 while read -r FILE; do
-   echo "$FILE" >> "$rxAlreadySeen"
-   get_inv.pl $BASEURL/$YM/$YMD/${FILE}.inv | \
-    fgrep -f "$pthFilterFile" | \
-     get_grib.pl $BASEURL/$YM/$YMD/$FILE.grb2 ${baseDir}/${FILE}.grb2 &
-   pid=$!
-   wait4pids+=" $pid"
-   FILEs[$pid]="${baseDir}/${FILE}.grb2"
+   echo "$FILE" >> "$rxAlreadySeen"   
+   ( get_inv.pl $BASEURL/$YM/$YMD/${FILE}.inv | fgrep -f "$pthFilterFile" | get_grib.pl $BASEURL/$YM/$YMD/$FILE.grb2 ${baseDir}/${FILE}.grb2 ) &
+   FILEs[$!]="${baseDir}/${FILE}.grb2"
    sleep 3
 done < <(
   curl -s $BASEURL/$YM/$YMD/ | \
-   sed -nr "/$fnFilter/p" | \
-    sed -nr '/gfs_4_/s%^.*>(gfs_4_[0-9]{8}_[0-9]{4}_[0-9]{3})\.inv<.*$%\1%p' | \
-     fgrep -v -f "$rxAlreadySeen"
+   sed -nr "/gfs_4_/{ /$fnFilter/s%^.*>(gfs_4_[0-9]{8}_(0[06]|1[28])00_[0-9]{3})\.inv<.*$%\1%p; }" | \
+    fgrep -v -f "$rxAlreadySeen"
 )
 
 if [[ $GRID_BOUND ]]; then        
- for pid in $wait4pids; do
+ for pid in ${!FILEs[@]}; do
   wait $pid
   wgrib2 ${FILEs[$pid]} -lola $GRID_BOUND ${FILEs[$pid]}.tmp grib && \
    mv ${FILEs[$pid]}.tmp ${FILEs[$pid]}
  done
 else
- for pid in $wait4pids; do
+ for pid in ${!FILEs[@]}; do
   wait $pid
  done
 fi

@@ -8,7 +8,7 @@ Usage:
  Where:
   -s CSV_SOURCE_PATH: specify the path to the day-folders containing CSV generated from Grib's
   -d XLS_DEST_PATH: specify a base path to the folder, where resulting/output XLS-files will be placed   
-  -H PREDICT_HOURS: How many hoursof prediction to include in XLS
+  -H PREDICT_HOURS: How many hours of prediction to include in XLS
   -D Turn on debug mode. This is equvalent to set -x in bash script. Script will run very slow and with extra-verbose output.
   -x For developer only!
   -n Delete source CSV after conversion to XLS 
@@ -23,13 +23,15 @@ order_pred_hours=120
 flReCreateMP2LBL=0
 flDontSaveCSV=0
 flDontUnpackCSV=0
-while getopts 's: d: H: Dxn' k; do
+mode='standart'
+while getopts 's: d: H: m: Dxn' k; do
  case $k in
   s) ncep_pth="$OPTARG" ;;
   d) dest_pth="$OPTARG" ;;
   H) order_pred_hours="$OPTARG" ;;
   D) set -x ;;
   x) flReCreateMP2LBL=1 ;;
+  m) mode="$OPTARG" ;;
   n) flDontSaveCSV=1 ;;
   \?) echo "Unknown key: $k" >&2; doShowUsage; exit 1 ;;
  esac
@@ -71,11 +73,16 @@ outCSVs=''
 for lola in $points; do
  csvFC=${lola//./} 
  csvFC="${bdate}_${zz_bhours}00_${csvFC/,/-}.csv" 
+
+ lon=${lola%,*}; lat=${lola#*,}
+ lon="${lon%.*}.$(rpad ${lon#*.} '000000')"
+ lat="${lat%.*}.$(rpad ${lat#*.} '000000')"
+ 
  exec 3<&1 1>"$csvFC"
 
  header="time,$(eval echo {0..${order_pred_hours}..3})"
- echo "${header// /,}"
-
+ echo "${header// /,}" 
+    
  for lbl in ${LBLOrder[@]}; do
   echo -n "$lbl"
   
@@ -99,13 +106,9 @@ for lola in $points; do
    csvSource="${src_pth}/gfs_4_${bdate}_${zz_bhours}00_${si}_${mp}.csv"
    [[ ! -f "$csvSource" && -f "${csvSource}.gz" ]] && \
     gzip -d "$csvSource.gz" 2>/dev/null
-   if [[ -f "$csvSource" ]]; then
-   
-    lon=${lola%,*}; lat=${lola#*,}
-    lon=${lon#.*}$(rpad ${lon#*.} '000000')
-    lat=${lat#.*}$(rpad ${lat#*.} '000000')
     
-    csv_row+=$(sed -nr "s%^${lon},\s*${lat},\s*([^,]+),?\s*$%,\1%p" "$csvSource")
+   if [[ -f "$csvSource" ]]; then    
+    csv_row+=$(sed -nr "s%^${lon},\s*${lat},\s*([^,]+),?\s*$%,\1%"'; T lbl; p; q; :lbl; $s%.*%,99999%p' "$csvSource")
    else
     csv_row+=',99999'
    fi
