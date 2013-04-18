@@ -1,7 +1,6 @@
 #!/bin/bash
-#
-#Execution time for 1 day: 4m 30s
-#
+set +H
+
 slf=${0##*/}
 
 source ${0%/*}/GRIB2DEF.inc
@@ -11,7 +10,7 @@ source ${0%/*}/GRIB2DEF.inc
 # exit 1
 #fi
 
-pthFilterFile="$BIN/filters/fire-fcast.grep"
+pthFilterFile="$BIN/filters/default.grep"
 fnFilter='.'
 while getopts 'f: D: d: g: x' key; do
  case $key in
@@ -36,10 +35,11 @@ mkdir -p "$baseDir"
 touch    "$rxAlreadySeen"
 
 declare -A FILEs
+
 while read -r FILE; do
    echo "$FILE" >> "$rxAlreadySeen"   
    ( get_inv.pl $BASEURL/$YM/$YMD/${FILE}.inv | fgrep -f "$pthFilterFile" | get_grib.pl $BASEURL/$YM/$YMD/$FILE.grb2 ${baseDir}/${FILE}.grb2 ) &
-   FILEs[$!]="${baseDir}/${FILE}.grb2"
+   FILEs["$!"]="${baseDir}/${FILE}.grb2"
    sleep 3
 done < <(
   curl -s $BASEURL/$YM/$YMD/ | \
@@ -47,15 +47,12 @@ done < <(
     fgrep -v -f "$rxAlreadySeen"
 )
 
-if [[ $GRID_BOUND ]]; then        
- for pid in ${!FILEs[@]}; do
-  wait $pid
-  wgrib2 ${FILEs[$pid]} -lola $GRID_BOUND ${FILEs[$pid]}.tmp grib && \
+for pid in ${!FILEs[@]}; do
+ wait $pid 2>/dev/null
+ if [[ $? -ne 0 ]]; then
+  rm -f "${FILEs[$pid]}"
+ elif [[ $GRID_BOUND ]]; then
+  wgrib2 ${FILEs[$pid]} -lola ${GRID_BOUND} ${FILEs[$pid]}.tmp grib && \
    mv ${FILEs[$pid]}.tmp ${FILEs[$pid]}
- done
-else
- for pid in ${!FILEs[@]}; do
-  wait $pid
- done
-fi
-
+ fi
+done
