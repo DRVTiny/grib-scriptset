@@ -1,28 +1,29 @@
 #!/bin/bash
+declare -A slf=([NAME]="${0##*/}" [PATH]="${0%/*}")
 source ~/bin/GRIB2DEF.inc
 
 startDate="$(date +%Y)-01-01"
 pthFilterFile=~/bin/filters/fire-fcast.grep
 fnFilter=''
 flSkipIfExists=0
-pthTemp='/store/GRIB/raw/GFS4/EXH'
-pthDest='/store/GRIB/cooked/GFS4/EXH/csv'
+pthRawGrib2='/store/GRIB/raw/GFS4/EXH'
+pthCookedCSV='/store/GRIB/cooked/GFS4/EXH/csv'
 unset flTestOut
 mode='all'
-while getopts 'T: d: b: e: f: D: g: sx m:' key; do
+while getopts 's: d: b: e: f: D: g: m: ETx' key; do
  case $key in
- b) startDate="$OPTARG" ;;
- e) endDate="$OPTARG" ;;
- d) pthDest="$OPTARG" ;;
- T) pthTemp="$OPTARG" ;;
- f) pthFilterFile="$OPTARG" ;;
- D) fnFilter="$OPTARG" ;;
- s) flSkipIfExists=1 ;;
- g) gridBounds="$OPTARG" ;;
- t) flTestOut=1 ;;
- m) mode="${OPTARG,,}" ;;
- x) set -x; flDebug=1 ;;
- \?|*) exit 1 ;;
+  b) startDate="$OPTARG"  	;;
+  e) endDate="$OPTARG"    	;;
+  s) pthRawGrib2="$OPTARG"    	;;
+  d) pthCookedCSV="$OPTARG"    	;; 
+  f) pthFilterFile="$OPTARG" 	;;
+  D) fnFilter="$OPTARG"		;;
+  g) gridBounds="$OPTARG" 	;; 
+  m) mode="${OPTARG,,}"   	;;
+  E) flSkipIfExists=1     	;;
+  T) flTestOut=1          	;;
+  x) set -x; flDebug=1    	;;
+  \?|*) exit 1            	;;
  esac
 done
 shift $((OPTIND-1))
@@ -33,21 +34,15 @@ shift $((OPTIND-1))
 
 [[ -f $pthFilterFile ]] || exit 101
 
-[[ $startDate =~  ^20[0-9]{2}-(0[0-9]|1[0-2])-([0-2][0-9]|3[01])$ ]] || exit 102
-[[ $endDate =~  ^20[0-9]{2}-(0[0-9]|1[0-2])-([0-2][0-9]|3[01])$ ]] || exit 103
-
+[[ $startDate =~  ^20[0-9]{2}-(0[0-9]|1[0-2])-([0-2][0-9]|3[01])$ && $endDate =~ ^20[0-9]{2}-(0[0-9]|1[0-2])-([0-2][0-9]|3[01])$ ]] || exit 102
 
 nDays=$(( ( $(date -d $endDate +%s) - $(date -d $startDate +%s) )/(24*3600) + 1 ))
 
-#echo "GRIB2GET.sh -f $pthFilterFile -D \"$fnFilter\" -d $pthTemp $curDate
-#GRIB2CSV.sh -s $pthTemp -d $pthDest $curDate"
-#exit 0
 for ((i=0; i<nDays; i++)); do
  curDate=$(date -d "$startDate +${i} day" +%Y-%m-%d)
- { [[ -d $pthDest/$curDate ]] && (( flSkipIfExists )); } && continue
+ { [[ -d $pthCookedCSV/$curDate ]] && (( flSkipIfExists )); } && continue
  [[ $mode == 'all' || $mode == 'grb2' ]] && \
-  eval "${flTestOut+echo }GRIB2GET.sh ${flDebug+-x }-f $pthFilterFile ${fnFilter:+-D \"$fnFilter\"} -d $pthTemp $curDate"
+  eval "${flTestOut+echo }GRIB2GET.sh ${flDebug+-x }-d $pthRawGrib2                      ${fnFilter:+-D \"$fnFilter\" } -f ${pthFilterFile}             ${curDate}"
  [[ $mode == 'all' || $mode == 'csv' ]] && \
-  eval "${flTestOut+echo }GRIB2CSV.sh ${flDebug+-x }-s $pthTemp -d $pthDest ${gridBounds+-g \"$gridBounds\"} $curDate"
-# rm -rf $pthTemp/$curDate
+  eval "${flTestOut+echo }GRIB2CSV.sh ${flDebug+-x }-s ${pthRawGrib2} -d ${pthCookedCSV} ${fnFilter:+-D \"$fnFilter\" }${gridBounds+-g \"$gridBounds\" }${curDate}"
 done

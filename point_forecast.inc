@@ -1,4 +1,4 @@
-if (( flReCreateMP2LBL )); then
+if (( flReCompileHashes )); then
  declare  -A MP2LBL
  case ${mode=standart} in
  standart)
@@ -30,35 +30,25 @@ if (( flReCreateMP2LBL )); then
   :
  ;;
  esac
+ # On the fly create hash for reverse matching (table's label to meteoparameter ID)
+ declare  -A LBL2MP
+ for mp in ${!MP2LBL[@]}; do
+  LBL2MP[${MP2LBL["$mp"]}]="$mp"
+ done
 else
- declare -A MP2LBL='(
-		[UGRD-10_m_above_ground]="U10m"
-		[UGRD-850_mb]="U850"
-		[CSNOW-surface]="CSNOW"
-		[CFRZR-surface]="CFRZR"
-		[CRAIN-surface]="CRAIN"
-		[TMP-500_mb]="T500"
-		[RH-2_m_above_ground]="RH2m"
-		[TMAX-2_m_above_ground]="Tmax"
-		[GUST-surface]="GUST"
-		[RH-700_mb]="RH700"
-		[PRES-surface]="PRES"
-		[TMP-850_mb]="T850"
-		["TCDC-entire_atmosphere_(considered_as_a_single_layer)"]="TCDC"
-		[CICEP-surface]="CICEP"
-		[VGRD-10_m_above_ground]="V10m"
-		[TMP-700_mb]="T700"
-		[RH-500_mb]="RH500"
-		[APCP-surface]="APCP"
-		[UGRD-500_mb]="U500"
-		[TMIN-2_m_above_ground]="Tmin"
-		[VGRD-500_mb]="V500"
-		[TMP-2_m_above_ground]="T"
-		[UGRD-700_mb]="U700"
-		[VGRD-850_mb]="V850"
-		[RH-850_mb]="RH850"
-		[VGRD-700_mb]="V700"
- )'
+# Load pre-compile hashes
+# NOTE: To create apropriate ".def" files, call point_forecast with -Z key and -m TYPE_OF_HASHes parameters!
+ case ${mode=standart} in
+ standar[td])
+  source ${slf[PATH]}/${slf[NAME]%.*}_hashes_standart.def
+ ;;
+ extended)
+  source ${slf[PATH]}/${slf[NAME]%.*}_hashes_extended.def
+ ;;
+ *) 
+  :
+ ;;
+ esac
 fi
 
 declare -A NotInRA=(
@@ -73,7 +63,7 @@ declare -A NotInRA=(
 )
                                                                 
 case ${mode=standart} in
-standart)
+standar[td])
  declare -a LBLOrder=(
                  'PRES'
                  'TCDC'
@@ -128,8 +118,3 @@ extended)
  )
 ;;
 esac
-declare  -A LBL2MP
-
-for mp in ${!MP2LBL[@]}; do
- LBL2MP[${MP2LBL["$mp"]}]="$mp"
-done

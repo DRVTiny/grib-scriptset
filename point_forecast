@@ -1,4 +1,7 @@
 #!/bin/bash
+set +H
+declare -A slf=([PATH]="$(dirname $(readlink -e $0))" [NAME]="${0##*/}")
+
 source /opt/scripts/functions/strings.inc
 
 doShowUsage () {
@@ -10,7 +13,8 @@ Usage:
   -d XLS_DEST_PATH: specify a base path to the folder, where resulting/output XLS-files will be placed   
   -H PREDICT_HOURS: How many hours of prediction to include in XLS
   -D Turn on debug mode. This is equvalent to set -x in bash script. Script will run very slow and with extra-verbose output.
-  -x For developer only!
+  -x For developers only! (turn bash to work in debug mode)
+  -Z For developers only! (output hashes and exit immediately)
   -n Delete source CSV after conversion to XLS 
 EOF
  return 0
@@ -24,19 +28,32 @@ flReCreateMP2LBL=0
 flDontSaveCSV=0
 flDontUnpackCSV=0
 mode='standart'
-while getopts 's: d: H: m: Dxn' k; do
+while getopts 's: d: H: m: hDZxn' k; do
  case $k in
+  h) doShowUsage; exit 0 ;;
   s) ncep_pth="$OPTARG" ;;
-  d) dest_pth="$OPTARG" ;;
+  d) dst_pth="$OPTARG" ;;
   H) order_pred_hours="$OPTARG" ;;
   D) set -x ;;
-  x) flReCreateMP2LBL=1 ;;
+  x) flReCompileHashes=1 ;;
   m) mode="$OPTARG" ;;
+  Z) flPrintHashesAndExit=1; flReCompileHashes=1 ;;
   n) flDontSaveCSV=1 ;;
   \?) echo "Unknown key: $k" >&2; doShowUsage; exit 1 ;;
  esac
 done
 shift $((OPTIND-1))
+
+source $(dirname $(readlink -e "$0"))/${0##*/}.inc || {
+ echo "Cant source my include file: \"$(dirname $(readlink -e "$0"))/${0##*/}.inc\", check pathes!" >&2
+ exit 1
+}
+
+if [[ $flPrintHashesAndExit ]]; then
+ declare  -p MP2LBL
+ declare  -p LBL2MP
+ exit 0
+fi
 
 for k in points bdate bhours; do
  eval "$k='$1'"; shift
@@ -62,11 +79,9 @@ if [[ ! -d $src_pth ]]; then
  [[ -d $src_pth ]] || exit 112
 fi
 
-source $(dirname $(readlink -e "$0"))/${0##*/}.inc
-
-[[ $dest_pth ]] && { 
- mkdir -p "$dest_pth"
- cd "$dest_pth"
+[[ $dst_pth ]] && { 
+ mkdir -p "$dst_pth"
+ cd "$dst_pth"
 }
 
 outCSVs=''

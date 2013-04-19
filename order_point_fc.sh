@@ -1,5 +1,5 @@
 #!/bin/bash
-#source /opt/scripts/functions/parex.inc
+slf=${0##*/}
 
 eval_dinv () { 
  local d days month year
@@ -29,7 +29,7 @@ sqr_points () {
 doShowUsage () {
  cat <<EOF
 Usage:
- ${0##*/} [ -i DATA_ID ] [-d DEST_PATH ] [-m EMAIL_REPORT_TO ] [ -T ] [-s] [-P PREDICT_HOURS] 
+ $slf [ -i DATA_ID ] [-d DEST_PATH ] [-e EMAIL_REPORT_TO ] [-m MODE=(standart|extended)] [-P PREDICT_HOURS] [ -T ] [-s] [-x]
 EOF
  return 0
 }
@@ -40,22 +40,29 @@ TEMP_DIR='/tmp'
 DATA_ID='Rostov-On-Don'
 nPredictHours=120
 
-while getopts 'ysDTi: P: m: d:' k; do
+while getopts 'yshxTi: P: m: e: d:' k; do
  case $k in
-  D) set -x                   ;;
+  h) doShowUsage; exit 0      ;;
+  x) set -x                   ;;
   T) flTestOutCmds=1          ;;
   s) flResetSourcePath=1      ;;
   d) TEMP_DIR="${OPTARG%/}"   ;;
   i) DATA_ID="${OPTARG// /_}"
      DATA_ID="${DATA_ID//\//:}"
                               ;;
-  m) emailTO="$OPTARG"	      ;;
+  m) mode="${OPTARG,,}"       ;;
+  e) emailTO="$OPTARG"	      ;;
   P) nPredictHours="$OPTARG"  ;;
   y) (( $(fgrep processor /proc/cpuinfo | wc -l) > 1 )) && flParallelExec=1 ;;
-  *) doShowUsage; exit 1      ;;
+  \?|*) doShowUsage; exit 1      ;;
  esac
 done
 shift $((OPTIND-1))
+
+[[ $mode ]] && { [[ $mode =~ (standart|extended) ]] || { 
+ echo 'Mode must be "standart" or "extended"!'; doShowUsage; exit 1
+                                                       }
+               }
 
 [[ $flTestOutCmds && $flParallelExec ]] && {
  echo 'You cant specify both -y and -T!'
@@ -63,21 +70,22 @@ shift $((OPTIND-1))
  exit 1
 }
 
+
 declare -A dblocks ul_point
 
  dblocks[default]='1-29.02.2012'
  
- dblocks[RostovOnDon]='11-17.05.2012 1-7.07.2012' 
+ dblocks[RostovOnDon]='11-17.05.2012'
 ul_point[RostovOnDon]='47.5 39.5'
 
 # dblocks[Remontnoe]='05.2012 06.2012 07.2012 08.2012'
 #ul_point[Remontnoe]='47.0 43.5'
 
- dblocks[Kazanskaya]='5-11.08.2012'
-ul_point[Kazanskaya]='50.0 41.0'
+# dblocks[Kazanskaya]='5-11.08.2012'
+#ul_point[Kazanskaya]='50.0 41.0'
 
- dblocks[Millerovo]='18-21.08.2012'
-ul_point[Millerovo]='49.0 40.0'
+# dblocks[Millerovo]='18-21.08.2012'
+#ul_point[Millerovo]='49.0 40.0'
 
 # dblocks[Taganrog]='05.2012 06.2012 07.2012 08.2012'
 #ul_point[Taganrog]='47.5 38.5'
@@ -106,7 +114,9 @@ fi
   for dblock in ${dblocks[$meteoStationID]-${dblocks[default]}}; do
    mkdir -p $baseDir/$meteoStationID/$dblock
    for day in $(eval_dinv $dblock); do
-    echo "${flTestOutCmds+$HOME/bin/point_forecast}${flResetSourcePath+ -s /store/GRIB/cooked/GFS4/${DATA_ID}} -n -d $baseDir/$meteoStationID/$dblock -H $nPredictHours '$(sqr_points ${ul_point[$meteoStationID]})' $day 0"
+    cat <<EOF
+${flTestOutCmds+$HOME/bin/point_forecast}${flResetSourcePath+ -s /store/GRIB/cooked/GFS4/${DATA_ID}}${mode+ -m $mode} -n -d $baseDir/$meteoStationID/$dblock -H $nPredictHours '$(sqr_points ${ul_point[$meteoStationID]})' $day 0
+EOF
    done   
   done
  done

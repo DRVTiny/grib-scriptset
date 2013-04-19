@@ -1,14 +1,10 @@
 #!/bin/bash
+MAX_TASKS=8
+
 set +H
-
-slf=${0##*/}
-
-source ${0%/*}/GRIB2DEF.inc
-
-#if ! s=$(chkUnresDeps); then
-# { [[ $s ]] && echo "Unresolved dependencies found: \"$s\"" >&2; } || echo 'Problem while checking dependencies'
-# exit 1
-#fi
+declare -A slf=([NAME]=${0##*/} [PATH]=${0%/*})
+source /opt/scripts/functions/parex.inc
+source ${slf[PATH]}/GRIB2DEF.inc
 
 pthFilterFile="$BIN/filters/default.grep"
 fnFilter='.'
@@ -34,12 +30,14 @@ rxAlreadySeen="$baseDir/daily.grib2.grep"
 mkdir -p "$baseDir"
 touch    "$rxAlreadySeen"
 
-declare -A FILEs
+#declare -A FILEs
 
 while read -r FILE; do
-   echo "$FILE" >> "$rxAlreadySeen"   
-   ( get_inv.pl $BASEURL/$YM/$YMD/${FILE}.inv | fgrep -f "$pthFilterFile" | get_grib.pl $BASEURL/$YM/$YMD/$FILE.grb2 ${baseDir}/${FILE}.grb2 ) &
-   FILEs["$!"]="${baseDir}/${FILE}.grb2"
+   echo "$FILE" >> "$rxAlreadySeen"
+   push_task <<EOF
+get_inv.pl $BASEURL/$YM/$YMD/${FILE}.inv | fgrep -f "$pthFilterFile" | get_grib.pl $BASEURL/$YM/$YMD/$FILE.grb2 ${baseDir}/${FILE}.grb2
+EOF
+#   FILEs["$!"]="${baseDir}/${FILE}.grb2"
    sleep 3
 done < <(
   curl -s $BASEURL/$YM/$YMD/ | \
@@ -47,12 +45,14 @@ done < <(
     fgrep -v -f "$rxAlreadySeen"
 )
 
-for pid in ${!FILEs[@]}; do
- wait $pid 2>/dev/null
- if [[ $? -ne 0 ]]; then
-  rm -f "${FILEs[$pid]}"
- elif [[ $GRID_BOUND ]]; then
-  wgrib2 ${FILEs[$pid]} -lola ${GRID_BOUND} ${FILEs[$pid]}.tmp grib && \
-   mv ${FILEs[$pid]}.tmp ${FILEs[$pid]}
- fi
-done
+wait4_all_gone
+#for pid in ${!FILEs[@]}; do
+# wait $pid 2>/dev/null
+# if [[ $? -ne 0 ]]; then
+#  :
+##  rm -f "${FILEs[$pid]}"
+# elif [[ $GRID_BOUND ]]; then
+#  wgrib2 ${FILEs[$pid]} -lola ${GRID_BOUND} ${FILEs[$pid]}.tmp grib && \
+#   mv ${FILEs[$pid]}.tmp ${FILEs[$pid]}
+# fi
+#done

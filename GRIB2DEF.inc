@@ -5,7 +5,7 @@ GRIB_BASE='/store/GRIB'
 GFS_RAW="$GRIB_BASE/raw/GFS4"
 GFS_RAW_NAMOS="$GFS_RAW/NAMOS"
 GFS_RAW_NASA="$GFS_RAW/NASA"
-[[ $slf =~ CSV && ${GRID_BOUND=36:28:0.5 40:24:0.5} ]]
+[[ ${slf[NAME]-$slf} =~ CSV && ${GRID_BOUND=36:28:0.5 40:24:0.5} ]]
 declare -A DEPS=(['GRIB2GET.sh']='get_inv.pl get_grib.pl')
 
 GFS_COOKED="$GRIB_BASE/cooked/GFS4"
@@ -14,7 +14,7 @@ GFS_COOKED_CSV="$GFS_COOKED/csv"
 BASEURL='http://nomads.ncdc.noaa.gov/data/gfs4/'
 
 chkUnresDeps () {
- local dep errc=0 unres='' lst_deps="${DEPS[${slf=${0##*/}}]}"
+ local dep errc=0 unres='' lst_deps="${DEPS[${slf[NAME]-${0##*/}}]}"
  [[ $lst_deps ]] || return 0
  for dep in $lst_deps; do
   which "$dep" &>/dev/null || {
