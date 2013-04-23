@@ -75,8 +75,8 @@ declare -A dblocks ul_point
 
  dblocks[default]='1-29.02.2012'
  
- dblocks[RostovOnDon]='11-17.05.2012'
-ul_point[RostovOnDon]='47.5 39.5'
+# dblocks[RostovOnDon]='11-17.05.2012 1-7.07.2012'
+#ul_point[RostovOnDon]='47.5 39.5'
 
 # dblocks[Remontnoe]='05.2012 06.2012 07.2012 08.2012'
 #ul_point[Remontnoe]='47.0 43.5'
@@ -92,6 +92,8 @@ ul_point[RostovOnDon]='47.5 39.5'
 
 # dblocks[Konstantinovsk]='05.2012 06.2012 07.2012 08.2012'
 #ul_point[Konstantinovsk]='48.0 41.0'
+ dblocks[Tsimlyansk]='03.2012'
+ul_point[Tsimlyansk]='48.0 42.0'
 
 baseDir="$TEMP_DIR/$DATA_ID"
 if [[ -d $baseDir ]]; then

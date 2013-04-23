@@ -5,12 +5,14 @@ GRIB_BASE='/store/GRIB'
 GFS_RAW="$GRIB_BASE/raw/GFS4"
 GFS_RAW_NAMOS="$GFS_RAW/NAMOS"
 GFS_RAW_NASA="$GFS_RAW/NASA"
-[[ ${slf[NAME]-$slf} =~ CSV && ${GRID_BOUND=36:28:0.5 40:24:0.5} ]]
-declare -A DEPS=(['GRIB2GET.sh']='get_inv.pl get_grib.pl')
+
+declare -A DEPS=(
+        ['GRIB2GET.sh']='get_inv.pl get_grib.pl'
+)
 
 GFS_COOKED="$GRIB_BASE/cooked/GFS4"
 GFS_COOKED_CSV="$GFS_COOKED/csv"
-#http://nomads.ncdc.noaa.gov/data/gfs4/201206/20120625/gfs_4_20120625_0000_000.grb2
+# Example file path: http://nomads.ncdc.noaa.gov/data/gfs4/201206/20120625/gfs_4_20120625_0000_000.grb2
 BASEURL='http://nomads.ncdc.noaa.gov/data/gfs4/'
 
 chkUnresDeps () {

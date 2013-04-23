@@ -8,14 +8,16 @@ source ${slf[PATH]}/GRIB2DEF.inc
 
 pthFilterFile="$BIN/filters/default.grep"
 fnFilter='.'
-while getopts 'f: D: d: g: x' key; do
+while getopts 'f: D: d: g: xE' key; do
  case $key in
- x)    set -x				;;
- f)    pthFilterFile="$OPTARG"		;;
- D)    fnFilter="$OPTARG"		;;
- d)    RAW_DIR="$OPTARG"		;;
- g)    GRID_BOUND="$OPTARG"		;;
- \?|*) echo "Wrong key: -${key}"	;;
+  x)    set -x				;;
+  d)    grb2Path="$OPTARG"		;;
+  f)    pthFilterFile="$OPTARG"		;;
+  D)    fnFilter="$OPTARG"		;;
+  g)    GRID_BOUND="$OPTARG"		;;
+  E)    flSkipIfExists=1		;;
+ \?|*)  echo "Wrong key: -${key}"
+        exit 1	                        ;;
  esac
 done
 shift $((OPTIND-1))
@@ -24,25 +26,30 @@ export PATH="${BIN}:${PATH}"
 
 getDateCmdArg $@
 
-baseDir="${RAW_DIR:-$GFS_RAW_NAMOS}/$DATE"
-rxAlreadySeen="$baseDir/daily.grib2.grep"
+baseDir="${grb2Path:-$GFS_RAW_NAMOS}/$DATE"
 
 mkdir -p "$baseDir"
-touch    "$rxAlreadySeen"
 
 #declare -A FILEs
 
 while read -r FILE; do
-   echo "$FILE" >> "$rxAlreadySeen"
+   grb2File="${baseDir}/${FILE}.grb2"
+   [[ $flSkipIfExists && -f $grb2File && $(stat -c %s $grb2File) -gt 0 && $(wgrib2 "$grb2File" 2>/dev/null | wc -l) ]] && continue
    push_task <<EOF
-get_inv.pl $BASEURL/$YM/$YMD/${FILE}.inv | fgrep -f "$pthFilterFile" | get_grib.pl $BASEURL/$YM/$YMD/$FILE.grb2 ${baseDir}/${FILE}.grb2
+if get_inv.pl $BASEURL/$YM/$YMD/${FILE}.inv | \
+    fgrep -f '$pthFilterFile' | \
+     get_grib.pl $BASEURL/$YM/$YMD/${FILE}.grb2 ${baseDir}/${FILE}.grb2 && \
+      [[ -n '${GRID_BOUND}' ]]
+then
+ wgrib2 ${baseDir}/${FILE}.grb2 -lola ${GRID_BOUND} ${baseDir}/${FILE}.tmp grib && \
+  mv ${baseDir}/${FILE}.{tmp,grb2}
+fi
 EOF
 #   FILEs["$!"]="${baseDir}/${FILE}.grb2"
    sleep 3
 done < <(
   curl -s $BASEURL/$YM/$YMD/ | \
-   sed -nr "/gfs_4_/{ /$fnFilter/s%^.*>(gfs_4_[0-9]{8}_(0[06]|1[28])00_[0-9]{3})\.inv<.*$%\1%p; }" | \
-    fgrep -v -f "$rxAlreadySeen"
+   sed -nr "/gfs_4_/{ /$fnFilter/s%^.*>(gfs_4_[0-9]{8}_(0[06]|1[28])00_[0-9]{3})\.inv<.*$%\1%p; }"
 )
 
 wait4_all_gone

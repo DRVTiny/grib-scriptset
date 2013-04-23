@@ -10,15 +10,16 @@ pthRawGrib2='/store/GRIB/raw/GFS4/EXH'
 pthCookedCSV='/store/GRIB/cooked/GFS4/EXH/csv'
 unset flTestOut
 mode='all'
-while getopts 's: d: b: e: f: D: g: m: ETx' key; do
+while getopts 's: d: b: e: f: D: i: g: m: ETx' key; do
  case $key in
   b) startDate="$OPTARG"  	;;
   e) endDate="$OPTARG"    	;;
   s) pthRawGrib2="$OPTARG"    	;;
   d) pthCookedCSV="$OPTARG"    	;; 
+  i) DATA_ID="$OPTARG"		;;
   f) pthFilterFile="$OPTARG" 	;;
   D) fnFilter="$OPTARG"		;;
-  g) gridBounds="$OPTARG" 	;; 
+  g) gridBounds="$OPTARG" 	;;  
   m) mode="${OPTARG,,}"   	;;
   E) flSkipIfExists=1     	;;
   T) flTestOut=1          	;;
@@ -27,6 +28,11 @@ while getopts 's: d: b: e: f: D: g: m: ETx' key; do
  esac
 done
 shift $((OPTIND-1))
+
+if [[ $DATA_ID ]]; then
+ pthRawGrib2="/store/GRIB/raw/GFS4/${DATA_ID}"
+ pthCookedCSV=${pthRawGrib2/\/raw\//\/cooked\/}
+fi
 
 [[ ${endDate=$(getLatestDay | sed -r 's%([0-9]{4})([0-9]{2})([0-9]{2})%\1-\2-\3%')} ]] || exit 99
 
@@ -38,11 +44,22 @@ shift $((OPTIND-1))
 
 nDays=$(( ( $(date -d $endDate +%s) - $(date -d $startDate +%s) )/(24*3600) + 1 ))
 
+if [[ ${gridBounds:0:1} == '@' ]]; then
+ flRawGridConv=' '
+ gridBounds=${gridBounds:1}
+fi
+
+cmd='eval'
+[[ $flTestOut ]] && cmd='echo'
+
+GRIB2GET_="GRIB2GET.sh ${flDebug+-x }-d ${pthRawGrib2}${flRawGridConv+ -g \"$gridBounds\"}${fnFilter:+ -D \"$fnFilter\"} -f ${pthFilterFile} -E"
+GRIB2CSV_="GRIB2CSV.sh ${flDebug+-x }-s ${pthRawGrib2} -d ${pthCookedCSV} ${fnFilter:+ -D \"$fnFilter\" }${flRawGridConv:- -g \"$gridBounds\"}"
+
 for ((i=0; i<nDays; i++)); do
  curDate=$(date -d "$startDate +${i} day" +%Y-%m-%d)
  { [[ -d $pthCookedCSV/$curDate ]] && (( flSkipIfExists )); } && continue
  [[ $mode == 'all' || $mode == 'grb2' ]] && \
-  eval "${flTestOut+echo }GRIB2GET.sh ${flDebug+-x }-d $pthRawGrib2                      ${fnFilter:+-D \"$fnFilter\" } -f ${pthFilterFile}             ${curDate}"
+  $cmd "${GRIB2GET_} ${curDate}"
  [[ $mode == 'all' || $mode == 'csv' ]] && \
-  eval "${flTestOut+echo }GRIB2CSV.sh ${flDebug+-x }-s ${pthRawGrib2} -d ${pthCookedCSV} ${fnFilter:+-D \"$fnFilter\" }${gridBounds+-g \"$gridBounds\" }${curDate}"
+  $cmd "${GRIB2CSV_} ${curDate}"
 done
