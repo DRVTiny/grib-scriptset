@@ -109,10 +109,11 @@ fi
  done
 } | $cmd
 
-if [[ $emailTO && -d $DATA_ID ]]; then
- cd $TEMP_DIR
- [[ $flRemoveCSV ]] && find $DATA_ID/ -type f -name '*.csv' -delete
+[[ $flRemoveCSV ]] && find "${baseDir%/}/" -type f -name '*.csv' -delete
+
+if [[ $emailTO ]]; then
+ cd "$TEMP_DIR"
  zip -r $DATA_ID{.zip,/}
- mailfile.pl -f ${DATA_ID}.zip -d $emailTO -T "Meteoreport inside (ID=${DATA_ID})"
+ mailfile.pl -f ${DATA_ID}.zip -d $emailTO -T "See meteoreport inside (ID=${DATA_ID})"
  rm -f ${DATA_ID}.zip
 fi
