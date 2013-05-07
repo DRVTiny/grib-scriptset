@@ -7,7 +7,7 @@ source /opt/scripts/functions/strings.inc
 doShowUsage () {
 cat <<EOF
 Usage:
- ${slf:-${0##*/}} [-s CSV_SOURCE_PATH] [-d XLS_DEST_PATH ] [-H PREDICT_HOURS ] [-D] [-x] [-n] 'longitude1,latitude1 longitude2,latitude2 ... longitudeN,latitudeN' date hour
+ ${slf:-${0##*/}} [-f ALL_POINTS_FILE] [-s CSV_SOURCE_PATH] [-d XLS_DEST_PATH ] [-H PREDICT_HOURS ] [-D] [-x] [-n] 'longitude1,latitude1 longitude2,latitude2 ... longitudeN,latitudeN' date hour
  Where:
   -s CSV_SOURCE_PATH: specify the path to the day-folders containing CSV generated from Grib's
   -d XLS_DEST_PATH: specify a base path to the folder, where resulting/output XLS-files will be placed   
@@ -16,6 +16,7 @@ Usage:
   -x For developers only! (turn bash to work in debug mode)
   -Z For developers only! (output hashes and exit immediately)
   -n Delete source CSV after conversion to XLS 
+  -f FILE: If you want to save report for all points in one file
 EOF
  return 0
 }
@@ -28,7 +29,7 @@ flReCreateMP2LBL=0
 flDontSaveCSV=0
 flDontUnpackCSV=0
 mode='standart'
-while getopts 's: d: H: m: hDZxn' k; do
+while getopts 's: d: H: m: f: hDZxn' k; do
  case $k in
   h) doShowUsage; exit 0 ;;
   s) ncep_pth="$OPTARG" ;;
@@ -39,6 +40,7 @@ while getopts 's: d: H: m: hDZxn' k; do
   m) mode="$OPTARG" ;;
   Z) flPrintHashesAndExit=1; flReCompileHashes=1 ;;
   n) flDontSaveCSV=1 ;;
+  f) fileWhere2Save="$OPTARG" ;;
   \?) echo "Unknown key: $k" >&2; doShowUsage; exit 1 ;;
  esac
 done
@@ -85,15 +87,17 @@ fi
 }
 
 outCSVs=''
+csvFC="$fileWhere2Save"
 for lola in $points; do
- csvFC=${lola//./} 
- csvFC="${bdate}_${zz_bhours}00_${csvFC/,/-}.csv" 
-
+ [[ $fileWhere2Save ]] || {
+  csvFC=${lola//./}
+  csvFC="${bdate}_${zz_bhours}00_${csvFC/,/-}.csv" 
+ }
  lon=${lola%,*}; lat=${lola#*,}
  lon="${lon%.*}.$(rpad ${lon#*.} '000000')"
  lat="${lat%.*}.$(rpad ${lat#*.} '000000')"
  
- exec 3<&1 1>"$csvFC"
+ exec 3<&1 1>>"$csvFC"
 
  header="time,$(eval echo {0..${order_pred_hours}..3})"
  echo "${header// /,}" 
@@ -137,6 +141,10 @@ for lola in $points; do
  outCSVs+="$csvFC "
 done
 
-{ for csvFC in ${outCSVs% }; do  
-   echo "${csvFC%.csv}.xls $csvFC"
-  done; } | parallel eval 'csv2xls'
+if [[ $fileWhere2Save ]]; then
+ csv2xls ${fileWhere2Save%.*}.xls $fileWhere2Save
+else
+ { for csvFC in ${outCSVs% }; do  
+    echo "${csvFC%.csv}.xls $csvFC"
+   done; } | parallel eval 'csv2xls'
+fi

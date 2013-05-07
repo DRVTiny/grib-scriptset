@@ -43,13 +43,14 @@ DATA_ID='Rostov-On-Don'
 nPredictHours=120
 pthStationsINI="$HOME/conf/areas.ini"
 
-while getopts 'yshxCTi: P: m: e: d: f:' k; do
+while getopts 'yshxCTi: P: m: e: d: f: b:' k; do
  case $k in
   h) doShowUsage; exit 0      ;;
   x) set -x                   ;;
   T) flTestOutCmds=1          ;;
   s) flResetSourcePath=1      ;;
   d) TEMP_DIR="${OPTARG%/}"   ;;
+  b) dblocks0="$OPTARG"	      ;;
   i) DATA_ID="${OPTARG// /_}"
      DATA_ID="${DATA_ID//\//:}"
                               ;;
@@ -95,11 +96,12 @@ else
  cmd="parallel eval '${HOME}/bin/point_forecast'"
 fi
 
+
 {
  for meteoStationID in ${!INIdimensions[@]}; do
   mkdir -p $baseDir/$meteoStationID
   POINT_FORECAST="${flTestOutCmds+$HOME/bin/point_forecast}${flResetSourcePath+ -s /store/GRIB/cooked/GFS4/${DATA_ID}}${mode+ -m $mode} %DEST% -n -H ${nPredictHours} '$(sqr_points ${INIdimensions[$meteoStationID]})'"
-  for dblock in ${INIdblocks[$meteoStationID]-${INIdblocks[default]}}; do
+  for dblock in ${INIdblocks[$meteoStationID]-${INIdblocks[default]:-$dblocks0}}; do
    mkdir -p $baseDir/$meteoStationID/$dblock
    POINT_FORECAST="${POINT_FORECAST/\%DEST\%/-d $baseDir/$meteoStationID/$dblock}"
    for day in $(eval_dinv $dblock); do
@@ -109,11 +111,19 @@ fi
  done
 } | $cmd
 
+(( flTestOutCmds )) && exit 0
+
 [[ $flRemoveCSV ]] && find "${baseDir%/}/" -type f -name '*.csv' -delete
 
 if [[ $emailTO ]]; then
  cd "$TEMP_DIR"
  zip -r $DATA_ID{.zip,/}
- mailfile.pl -f ${DATA_ID}.zip -d $emailTO -T "See meteoreport inside (ID=${DATA_ID})"
+ if [[ $emailTO =~ / ]]; then
+  subj=$(doMacroSub "${emailTO#*/}")
+  emailTO=${emailTO%%/*}
+ else
+  subj="See meteoreport inside (ID=${DATA_ID})"
+ fi
+ mailfile.pl -f ${DATA_ID}.zip -d $emailTO -T "$subj"
  rm -f ${DATA_ID}.zip
 fi
