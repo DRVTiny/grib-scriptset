@@ -1,17 +1,25 @@
 #!/bin/bash
+shopt -s extglob
 slf=${0##*/}
 
 eval_dinv () { 
- local d days month year
+ local d fd ld days month year
  IFS='.' read days month year <<<"$1"
  if [[ ! $year ]]; then
   year=$month
   month=$days
   days='1-'$(date -d "${year}${month}01+1 month-1 day" +%d)
  fi
- for ((d=${days%-*}; d<=${days#*-}; d++)); do
-  echo ${year}${month}$(printf '%02g' $d)
- done
+ if [[ $days =~ - ]]; then
+  fD=${days%-*}; fD=${fD##*(0)}
+  lD=${days##*-*(0)}
+  ((fD>lD)) && { d=$fD; fD=$lD; lD=$d; }
+  for ((d=$fD; d<=$lD; d++)); do
+   echo ${year}${month}$(printf '%02g' $d)
+  done
+ else
+  echo ${year}${month}$(printf '%02g' ${days##*(0)})
+ fi 
  return 0
 }
 
