@@ -99,25 +99,25 @@ local FE tmp_
   { rm -rf $GFS_RAW_PATH && mkdir -p $GFS_RAW_PATH; }
  (( FL_CLEAN_CSV_DIR || FL_CLEAN_CSV )) && \
   { rm -rf $GFS_CSV_PATH && mkdir -p $GFS_CSV_PATH; }
-  
+ [[ $1 =~ ^([0-9]{10})?$ ]] || return 1 
  TS="${1:-$(getLatestDataTS)}" 
+
+ OUT_FORMAT=${OUT_FORMAT^^}
+ OUT_EXT=${FORMAT_EXT[${OUT_FORMAT}]}
+ [[ $OUT_EXT ]] || { 
+  echo "Sorry, we dont know, how to work with output format \"$OUT_FORMAT\" yet" >&2
+  exit 1
+ }
+ 
+ [[ $FL_ZIP_OUT == 1 && ! $COMPRESS_EXT ]] && COMPRESS_EXT=${ZIP_EXT["${COMPRESS_CMD%%[[:space:]]*}"]:-zip}
  
  while read l; do
-  IFS=':' read -a a <<<"${l// /_}"  
+  IFS=':' read -a a <<<"${l// /_}"
   YMD=${TS:0:8}; HH=${TS:8:2}
   la=${#a[@]}-1
   METEOPAR=${a[la-1]}
   METEOPAR_COND=${a[la]}
-  mkdir -p {$GFS_RAW_PATH,$GFS_CSV_PATH}/${YMD}  
-  
-  OUT_FORMAT=${OUT_FORMAT^^}
-  OUT_EXT=${FORMAT_EXT[${OUT_FORMAT}]}
-  [[ $OUT_EXT ]] || { 
-   echo "Sorry, we dont know, how to work with output format \"$OUT_FORMAT\" yet" >&2
-   exit 1
-  }
-  
-  [[ $FL_ZIP_OUT == 1 && ! $COMPRESS_EXT ]] && COMPRESS_EXT=${ZIP_EXT["${COMPRESS_CMD%%[[:space:]]*}"]-zip}
+  mkdir -p {$GFS_RAW_PATH,$GFS_CSV_PATH}/${YMD}
   
   for H_DIA in ${WFC_PREDICT_H_DIA:=000..${WFC_PREDICT_H}..${WFC_STEP_H}}; do
    for si in $(eval "echo {${H_DIA}}"); do
@@ -125,8 +125,11 @@ local FE tmp_
     grb2File="$GFS_RAW_PATH/${YMD}/$(doMacroSubst GRB2_NAME_TEMPL)"
 
     outFile="$GFS_CSV_PATH/${YMD}/$(doMacroSubst COOKED_NAME_TEMPL)"
-    
-    [[ -f $outFile || ( $FL_ZIP_OUT == 1 && -f "${outFile}.${COMPRESS_EXT}" ) ]] && continue
+    outFileZ="${outFile}.${COMPRESS_EXT}"
+# Check whether target CSV file or its compressed representation exists and it is not empty
+    [[ ( -f $outFile && $(stat -c %s $outFile) -gt 0 ) || \
+       ( $FL_ZIP_OUT == 1 && -f $outFileZ && $(stat -c %s $outFileZ) -gt 0 ) \
+    ]] && continue
     
     if ! [[ -f $grb2File ]]; then
      [[ $si =~ ^0?([0-9]{2,3})$ ]]

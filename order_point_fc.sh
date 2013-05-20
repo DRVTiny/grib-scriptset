@@ -47,16 +47,16 @@ source /opt/scripts/functions/config.func
 unset flTestOutCmds flResetSourcePath flParallelExec
 
 TEMP_DIR='/tmp'
-DATA_ID='Rostov-On-Don'
 nPredictHours=120
 pthStationsINI="$HOME/conf/areas.ini"
 
-while getopts 'yshxCTi: P: m: e: d: f: b:' k; do
+while getopts 'yShxCTi: s: P: m: e: d: f: b:' k; do
  case $k in
   h) doShowUsage; exit 0      ;;
   x) set -x                   ;;
   T) flTestOutCmds=1          ;;
-  s) flResetSourcePath=1      ;;
+  s) pthCookedCSVs="$OPTARG"  ;;
+  S) flResetSourcePath=1      ;;
   d) TEMP_DIR="${OPTARG%/}"   ;;
   b) dblocks0="$OPTARG"	      ;;
   i) DATA_ID="${OPTARG// /_}"
@@ -84,6 +84,24 @@ shift $((OPTIND-1))
  exit 1
 }
 
+if (( flResetSourcePath )); then
+ [[ $pthCookedCSVs ]] && {
+  echo 'You cant specify both -s and -S!' >&2
+  doShowUsage
+  exit 1
+ }
+ [[ $DATA_ID ]] || {
+  echo 'You MUST specify -i when using -S (because source path will be reseted based on the value specified with the "-i" key)' >&2
+  exit 1
+ }
+ pthCookedCSVs="/store/GRIB/cooked/GFS4/${DATA_ID}"
+fi
+
+if [[ $pthCookedCSVs && ! -d $pthCookedCSVs ]]; then
+ echo "Source path ($pthCookedCSVs) is invalid" >&2
+ exit 1
+fi
+
 if [[ -f $pthStationsINI && -r $pthStationsINI ]]; then
  eval "$(read_ini $pthStationsINI)"
 else
@@ -91,7 +109,7 @@ else
  exit 1
 fi
 
-baseDir="$TEMP_DIR/$DATA_ID"
+baseDir="$TEMP_DIR/${DATA_ID:=MeteoReport}"
 if [[ -d $baseDir ]]; then
  rm -rf $baseDir/*
 else
@@ -108,10 +126,13 @@ fi
 {
  for meteoStationID in ${!INIdimensions[@]}; do
   mkdir -p $baseDir/$meteoStationID
-  POINT_FORECAST="${flTestOutCmds+$HOME/bin/point_forecast}${flResetSourcePath+ -s /store/GRIB/cooked/GFS4/${DATA_ID}}${mode+ -m $mode} %DEST% -n -H ${nPredictHours} '$(sqr_points ${INIdimensions[$meteoStationID]})'"
-  for dblock in ${INIdblocks[$meteoStationID]-${INIdblocks[default]:-$dblocks0}}; do
+  unset src
+  [[ $pthCookedCSVs || ${INIsource[$meteoStationID]:-${INIsource[default]}} ]] && \
+   src="-s ${pthCookedCSVs:-${INIsource[$meteoStationID]}}"
+  POINT_FORECAST="${flTestOutCmds+$HOME/bin/point_forecast} ${src} ${mode+ -m $mode} %DEST% -n -H ${nPredictHours} '$(sqr_points ${INIdimensions[$meteoStationID]})'"
+  for dblock in ${INIdblocks[$meteoStationID]:-${INIdblocks[default]:-$dblocks0}}; do
    mkdir -p $baseDir/$meteoStationID/$dblock
-   POINT_FORECAST="${POINT_FORECAST/\%DEST\%/-d $baseDir/$meteoStationID/$dblock}"
+   POINT_FORECAST="${POINT_FORECAST//%DEST%/-d $baseDir/$meteoStationID/$dblock}"
    for day in $(eval_dinv $dblock); do
     echo "${POINT_FORECAST} $day 0"
    done
