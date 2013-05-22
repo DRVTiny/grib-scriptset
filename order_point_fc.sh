@@ -127,9 +127,8 @@ fi
  for meteoStationID in ${!INIdimensions[@]}; do
   mkdir -p $baseDir/$meteoStationID
   unset src
-  [[ $pthCookedCSVs || ${INIsource[$meteoStationID]:-${INIsource[default]}} ]] && \
-   src="-s ${pthCookedCSVs:-${INIsource[$meteoStationID]}}"
-  POINT_FORECAST="${flTestOutCmds+$HOME/bin/point_forecast} ${src} ${mode+ -m $mode} %DEST% -n -H ${nPredictHours} '$(sqr_points ${INIdimensions[$meteoStationID]})'"
+  src=${pthCookedCSVs:-${INIsource[$meteoStationID]:=${INIsource[default]}}}
+  POINT_FORECAST="${flTestOutCmds+$HOME/bin/point_forecast} ${src:+-s $src} ${mode+ -m $mode} %DEST% -n -H ${nPredictHours} '$(sqr_points ${INIdimensions[$meteoStationID]})'"
   for dblock in ${INIdblocks[$meteoStationID]:-${INIdblocks[default]:-$dblocks0}}; do
    mkdir -p $baseDir/$meteoStationID/$dblock
    POINT_FORECAST="${POINT_FORECAST//%DEST%/-d $baseDir/$meteoStationID/$dblock}"
