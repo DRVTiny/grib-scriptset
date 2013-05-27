@@ -1,5 +1,6 @@
 #!/bin/bash
 slf="${0##*/}"
+unset DEBUG
 source /opt/scripts/functions/debug.func
 source /opt/scripts/functions/parex.inc
 log_open /var/log/grib/grab_ncep.log
@@ -7,7 +8,7 @@ ID='rostov-on-don'
 while getopts 'xTA:' key; do
  case $key in
   A) ID="$OPTARG" ;;
-  x) flDebug=1; set -x ;; 
+  x) export DEBUG=1; set -x ;; 
   T) flTestOut=1 ;;
   \?|*) fatal_ "Unknown key passed to me: $key"; exit 1 ;;
  esac

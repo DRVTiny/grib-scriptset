@@ -1,3 +1,4 @@
+
 if (( flReCompileHashes )); then
  declare  -A MP2LBL
  case ${mode=standart} in
@@ -18,8 +19,8 @@ if (( flReCompileHashes )); then
    MP2LBL["$mp"]="${mp%%-*}"
   done
 
-  for mp in {{U,V}GRD,RH,TMP,HGT}-{{100..900..50},{925..975..25}}_mb; do
-   MP2LBL["$mp"]=$(sed -r 's%([UV]|T|RH|HGT)((GRD|MP)?)-([0-9]+)_mb%\1\4%' <<<"$mp")
+  for mp in {{U,V}GRD,RH,TMP,HGT,VVEL}-{{100..900..50},{925..975..25}}_mb; do
+   MP2LBL["$mp"]=$(sed -r 's%([UV](VEL)?|T|RH|HGT)((GRD|MP)?)-([0-9]+)_mb%\1\5%' <<<"$mp")
   done
 
   MP2LBL+=(['TMAX-2_m_above_ground']='Tmax'  ['TMIN-2_m_above_ground']='Tmin'  ['TMP-2_m_above_ground']='T'  )
@@ -36,7 +37,7 @@ if (( flReCompileHashes )); then
   LBL2MP[${MP2LBL["$mp"]}]="$mp"
  done
 else
-# Load pre-compile hashes
+# Load pre-compiled hashes
 # NOTE: To create apropriate ".def" files, call point_forecast with -Z key and -m TYPE_OF_HASHes parameters!
  case ${mode=standart} in
  standar[td])
@@ -114,6 +115,7 @@ extended)
                  'Tmin'
                  'T'
 		 HGT{{100..900..50},{925..975..25}}
+		 VVEL{{100..900..50},{925..975..25}}
 		 'WEASD'
  )
 ;;

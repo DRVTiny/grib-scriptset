@@ -1,5 +1,6 @@
 #!/bin/bash
 doMacroSubst () {
+ [[ $DEBUG ]] && set +x
  local v="$1" m
  local ev="${!v}"
  if [[ $ev =~ ^\<nomacro\> ]]; then
@@ -12,6 +13,7 @@ doMacroSubst () {
   done
   echo "$ev"
  fi
+ [[ $DEBUG ]] && set -x
  return 0
 }
 
@@ -122,6 +124,8 @@ local FE tmp_
   for H_DIA in ${WFC_PREDICT_H_DIA:=000..${WFC_PREDICT_H}..${WFC_STEP_H}}; do
    for si in $(eval "echo {${H_DIA}}"); do
 # si = Hours of prediction, format (ex.): 004, 015, 180  
+# Remember: Unlike archive GFS dowbloading, here GRB2 will be individual for each meteoparameter, base timestamp and hour of prediction
+# Typical GRB2_NAME_TEMPL (see upper): <nomacro>gfs_4_{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.grb2
     grb2File="$GFS_RAW_PATH/${YMD}/$(doMacroSubst GRB2_NAME_TEMPL)"
 
     outFile="$GFS_CSV_PATH/${YMD}/$(doMacroSubst COOKED_NAME_TEMPL)"
@@ -135,7 +139,7 @@ local FE tmp_
      [[ $si =~ ^0?([0-9]{2,3})$ ]]
      wget -q "${HELPER}?file=gfs.t${HH}z.mastergrb2f${BASH_REMATCH[1]}&lev_${METEOPAR_COND}=on&var_${METEOPAR}=on&subregion=&leftlon=${MIN_LON}&rightlon=${MAX_LON}&toplat=${MAX_LAT}&bottomlat=${MIN_LAT}&dir=%2Fgfs.${TS}%2Fmaster" \
          -O "$grb2File"
-     if (( $? || ( $(stat -c %s "$grb2File") == 0 ) )); then
+     if ! [[ $? -eq 0  && -f $grb2File && $(stat -c %s "$grb2File") -gt 0 ]]; then
       rm -f "$grb2File"
       continue
      fi     
