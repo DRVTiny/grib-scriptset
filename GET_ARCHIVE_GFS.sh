@@ -1,4 +1,29 @@
 #!/bin/bash
+shopt -s extglob; set +H
+doShowUsage () {
+ cat <<EOF
+Usage: ${slf[NAME]} 
+  [-b START_DATE] where START_DATE=YYYY-MM-DD
+  [-e FIN_DATE]   where FIN_DATE=YYYY-MM-DD
+  [-s PATH_TO_RAW_GRB2] note: GRB2 files must be in PATH_TO_RAW_GRB2/YYYY-?MM-?DD subdirs!
+  [-d PATH_WHERE_COOKED_CSV] note: CSV files goes to PATH_WHERE_COOKED_CSV/YYYYMMDD
+  [-i DATA_ID]          Example: ROSTOV_ON_DON
+  [-f FILTER_FILE]      Example: /usr/local/warehouse/bin/filters/extended.grep
+  [-D FILE_NAME_FILTER] Example: _0000_003
+  [-g GRID_BOUND]       Example: 36:28:0.5 39:26:0.5
+  [-m MODE] Specify what 2 do: 
+             - only download grb2 files (MODE=grb2),
+             - generate csv's from previously downloaded grb2 files (MODE=csv) or
+             - (default) download grb2 and generate appropriate csv's for each of them (MODE=all)
+  [-E] Skip csv creation if it is already exists and file length is not null
+  [-T] Dont touch anything, output low-level commands instead
+  [-x] Standart BASH debug mode (see  man bash, -x key)
+  [-h] Show this message
+See http://wiki.namos.ru/Main/GetArchiveGFS for more info
+EOF
+ return 0
+}
+
 declare -A slf=([NAME]="${0##*/}" [PATH]="${0%/*}")
 source ~/bin/GRIB2DEF.inc
 
@@ -10,7 +35,7 @@ pthRawGrib2='/store/GRIB/raw/GFS4/EXH'
 pthCookedCSV='/store/GRIB/cooked/GFS4/EXH/csv'
 unset flTestOut
 mode='all'
-while getopts 's: d: b: e: f: D: i: g: m: ETx' key; do
+while getopts 's: d: b: e: f: D: i: g: m: ETxh' key; do
  case $key in
   b) startDate="$OPTARG"  	;;
   e) endDate="$OPTARG"    	;;
@@ -24,7 +49,9 @@ while getopts 's: d: b: e: f: D: i: g: m: ETx' key; do
   E) flSkipIfExists=1     	;;
   T) flTestOut=1          	;;
   x) set -x; flDebug=1    	;;
-  \?|*) exit 1            	;;
+  h) doShowUsage; exit 0        ;;
+  \?|*) echo 'ERROR: Wrong parameter passed to me!'
+        doShowUsage; exit 1   	;;
  esac
 done
 shift $((OPTIND-1))

@@ -1,27 +1,15 @@
 #!/bin/bash
-shopt -s extglob
-slf=${0##*/}
-
-eval_dinv () { 
- local d fd ld days month year
- IFS='.' read days month year <<<"$1"
- if [[ ! $year ]]; then
-  year=$month
-  month=$days
-  days='1-'$(date -d "${year}${month}01+1 month-1 day" +%d)
- fi
- if [[ $days =~ - ]]; then
-  fD=${days%-*}; fD=${fD##*(0)}
-  lD=${days##*-*(0)}
-  ((fD>lD)) && { d=$fD; fD=$lD; lD=$d; }
-  for ((d=$fD; d<=$lD; d++)); do
-   echo ${year}${month}$(printf '%02g' $d)
-  done
- else
-  echo ${year}${month}$(printf '%02g' ${days##*(0)})
- fi 
+doShowUsage () {
+ cat <<EOF
+Usage:
+ ${slf[NAME]} [ -i DATA_ID ] [-d DEST_PATH ] [-e EMAIL_REPORT_TO ] [-m MODE=(standart|extended)] [-P PREDICT_HOURS] [ -T ] [-s] [-x]
+EOF
  return 0
 }
+
+set +H
+shopt -s extglob
+declare -A slf=([NAME]=${0##*/} [PATH]=${0%/*})
 
 sqr_points () {
  local lat_u="$1"
@@ -34,15 +22,8 @@ sqr_points () {
  return 0
 }
 
-doShowUsage () {
- cat <<EOF
-Usage:
- $slf [ -i DATA_ID ] [-d DEST_PATH ] [-e EMAIL_REPORT_TO ] [-m MODE=(standart|extended)] [-P PREDICT_HOURS] [ -T ] [-s] [-x]
-EOF
- return 0
-}
-
-source /opt/scripts/functions/config.func
+source /opt/scripts/functions/config.func || exit 1500
+source /opt/scripts/functions/dates.inc || exit 1500
 
 unset flTestOutCmds flResetSourcePath flParallelExec
 
@@ -129,11 +110,12 @@ fi
   unset src
   src=${pthCookedCSVs:-${INIsource[$meteoStationID]:=${INIsource[default]}}}
   POINT_FORECAST="${flTestOutCmds+$HOME/bin/point_forecast} ${src:+-s $src} ${mode+ -m $mode} %DEST% -n -H ${nPredictHours} '$(sqr_points ${INIdimensions[$meteoStationID]})'"
-  for dblock in ${INIdblocks[$meteoStationID]:-${INIdblocks[default]:-$dblocks0}}; do
+  dblocks="${INIdblocks[$meteoStationID]:-${INIdblocks[default]:-$dblocks0}}"
+  for dblock in ${dblocks//;/ }; do
    mkdir -p $baseDir/$meteoStationID/$dblock
-   POINT_FORECAST="${POINT_FORECAST//%DEST%/-d $baseDir/$meteoStationID/$dblock}"
-   for day in $(eval_dinv $dblock); do
-    echo "${POINT_FORECAST} $day 0"
+   cmdPOINT_FORECAST="${POINT_FORECAST//%DEST%/-d $baseDir/$meteoStationID/$dblock}"
+   for day in $(dinv $dblock); do
+    echo "${cmdPOINT_FORECAST} $day 0"
    done
   done
  done
