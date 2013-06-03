@@ -11,7 +11,7 @@ chkUnresDeps || {
  echo "Unresolved dependencies: $DEPS" >&2
  exit 1
 }
-exit 0
+
 pthFilterFile="$BIN/filters/default.grep"
 fnFilter='.'
 while getopts 'f: D: d: g: xE' key; do
