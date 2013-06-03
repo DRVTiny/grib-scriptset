@@ -1,0 +1,26 @@
+:UGRD:10 m above ground
+:VGRD:10 m above ground
+:APCP:surface
+:GUST:surface
+:TMP:2 m above ground
+:RH:2 m above ground
+:TCDC:entire atmosphere (considered as a single layer)
+:PRES:surface
+:CRAIN:surface
+:CFRZR:surface
+:CICEP:surface
+:CSNOW:surface
+:TMAX:2 m above ground
+:TMIN:2 m above ground
+:UGRD:850 mb
+:UGRD:700 mb
+:UGRD:500 mb
+:VGRD:850 mb
+:VGRD:700 mb
+:VGRD:500 mb
+:TMP:850 mb
+:TMP:700 mb
+:TMP:500 mb
+:RH:850 mb
+:RH:700 mb
+:RH:500 mb
