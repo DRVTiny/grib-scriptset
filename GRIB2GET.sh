@@ -2,10 +2,16 @@
 MAX_TASKS=8
 
 set +H
-declare -A slf=([NAME]=${0##*/} [PATH]=${0%/*})
+me=$(readlink -e "$0")
+declare -A slf=([NAME]=${me##*/} [PATH]=${me%/*})
 source /opt/scripts/functions/parex.inc
 source ${slf[PATH]}/GRIB2DEF.inc
 
+chkUnresDeps || {
+ echo "Unresolved dependencies: $DEPS" >&2
+ exit 1
+}
+exit 0
 pthFilterFile="$BIN/filters/default.grep"
 fnFilter='.'
 while getopts 'f: D: d: g: xE' key; do

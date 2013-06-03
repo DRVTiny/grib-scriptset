@@ -7,21 +7,23 @@ GFS_RAW_NAMOS="$GFS_RAW/NAMOS"
 GFS_RAW_NASA="$GFS_RAW/NASA"
 
 declare -A DEPS=(
-        ['GRIB2GET.sh']='get_inv.pl get_grib.pl'
+        ['GRIB2GET.sh']='get_inv.pl get_grib.pl curl parallel wgrib2'
+	['GRIB2CSV.sh']='parallel wgrib2'
 )
 
 GFS_COOKED="$GRIB_BASE/cooked/GFS4"
 GFS_COOKED_CSV="$GFS_COOKED/csv"
 # Example file path: http://nomads.ncdc.noaa.gov/data/gfs4/201206/20120625/gfs_4_20120625_0000_000.grb2
 BASEURL='http://nomads.ncdc.noaa.gov/data/gfs4/'
-
+DEPS=''
 chkUnresDeps () {
  local dep errc=0 unres='' lst_deps="${DEPS[${slf[NAME]-${0##*/}}]}"
  [[ $lst_deps ]] || return 0
+ DEPS=''
  for dep in $lst_deps; do
-  which "$dep" &>/dev/null || {
+  [[ $dep =~ / && -f $dep ]] || which "$dep" &>/dev/null || {
    (( errc++ ))
-   unres+=" $dep"
+   DEPS+=" $dep"
   }
  done
  echo -n "$unres"
