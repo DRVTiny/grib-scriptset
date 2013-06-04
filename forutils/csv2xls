@@ -1,0 +1,40 @@
+#!/usr/bin/perl
+use strict;
+use Spreadsheet::WriteExcel;
+
+if (! @ARGV) {
+        print <<EOF;
+format:  csv2xls excelFileName commaSaperatedListOfCSVs [delimiter]
+example: csv2xls example.xls sheet1.csv,sheet2.csv ":"
+EOF
+        exit(1);
+}
+
+my ($pthXLSFile, $lstCSVFiles, $delim) = @ARGV;
+$delim||=',';
+
+my @inCSV = split(/${delim}/, $lstCSVFiles);
+my $wb = Spreadsheet::WriteExcel->new($pthXLSFile);
+
+for my $csv (@inCSV) {
+        print "Processing ${csv}...\n";
+        my ($idWorkSheet) = ($csv =~ m%^(?:/?(?:[^/]+/)*)?([^/]+)\.[^\.]+$%);
+        next unless $idWorkSheet;
+        open (CSV, $csv) || die ("Could not open source file ${csv}!");
+        my $sh = $wb->add_worksheet($idWorkSheet);
+        
+        my $row = 0;
+        while (<CSV>) {
+                my $col = 0;
+                my @entries=split /${delim}/;
+                for (@entries) {
+                        $sh->write($row, $col, $_);
+                        $col++;
+                }
+                $row++;
+        }
+        
+        close (CSV);
+}
+
+$wb->close();
