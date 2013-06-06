@@ -96,7 +96,7 @@ local l a=() TS
 declare -i la
 local grb2File outFile
 local YMD i si
-local FE tmp_
+local FE tmp_ PID
  (( FL_CLEAN_RAW_DIR || FL_CLEAN_RAW )) && \
   { rm -rf $GFS_RAW_PATH && mkdir -p $GFS_RAW_PATH; }
  (( FL_CLEAN_CSV_DIR || FL_CLEAN_CSV )) && \
@@ -104,31 +104,49 @@ local FE tmp_
  [[ $1 =~ ^([0-9]{10})?$ ]] || return 1 
  TS="${1:-$(getLatestDataTS)}" 
 
+ YMD=${TS:0:8}; HH=${TS:8:2}
+ mkdir -p {$GFS_RAW_PATH,$GFS_CSV_PATH}/${YMD}
+ pthCooked="${GFS_CSV_PATH}/${YMD}"
+ pthRaw="${GFS_RAW_PATH}/${YMD}"
+ 
+ if [[ -f ${pthCooked}.pid ]]; then
+  PID=$(<${pthCooked}.pid)  
+  if [[ $PID =~ ^[0-9]+$ && -f /proc/$PID/cmdline ]] 2>/dev/null; then
+   echo "Directory ${pthCooked} seems to be locked by process [$PID], we have nothing to do here" >&2
+   return 1
+  else
+   rm -f ${pthCooked}.pid
+  fi
+ else
+  echo "$$" > ${pthCooked}.pid
+  trap "rm -f ${pthCooked}.pid" SIGINT SIGTERM SIGHUP SIGQUIT EXIT
+ fi
+ 
  OUT_FORMAT=${OUT_FORMAT^^}
  OUT_EXT=${FORMAT_EXT[${OUT_FORMAT}]}
  [[ $OUT_EXT ]] || { 
   echo "Sorry, we dont know, how to work with output format \"$OUT_FORMAT\" yet" >&2
-  exit 1
+  return 1
  }
  
  [[ $FL_ZIP_OUT == 1 && ! $COMPRESS_EXT ]] && COMPRESS_EXT=${ZIP_EXT["${COMPRESS_CMD%%[[:space:]]*}"]:-zip}
  
  while read l; do
   IFS=':' read -a a <<<"${l// /_}"
-  YMD=${TS:0:8}; HH=${TS:8:2}
   la=${#a[@]}-1
   METEOPAR=${a[la-1]}
   METEOPAR_COND=${a[la]}
-  mkdir -p {$GFS_RAW_PATH,$GFS_CSV_PATH}/${YMD}
-  
+
   for H_DIA in ${WFC_PREDICT_H_DIA:=000..${WFC_PREDICT_H}..${WFC_STEP_H}}; do
    for si in $(eval "echo {${H_DIA}}"); do
 # si = Hours of prediction, format (ex.): 004, 015, 180  
-# Remember: Unlike archive GFS dowbloading, here GRB2 will be individual for each meteoparameter, base timestamp and hour of prediction
-# Typical GRB2_NAME_TEMPL (see upper): <nomacro>gfs_4_{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.grb2
-    grb2File="$GFS_RAW_PATH/${YMD}/$(doMacroSubst GRB2_NAME_TEMPL)"
+# Remember: Unlike archive GFS downloading, here GRB2 will be individual for each meteoparameter, base timestamp and hour of prediction
+#
+# GRB2_NAME_TEMPL (see upper): <nomacro>gfs_4_{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.grb2
+# Note: grb2 is hardcoded, as of now you cant use other extension for raw files
+    grb2File="$pthRaw/$(doMacroSubst GRB2_NAME_TEMPL)"
 
-    outFile="$GFS_CSV_PATH/${YMD}/$(doMacroSubst COOKED_NAME_TEMPL)"
+    outFile="$pthCooked/$(doMacroSubst COOKED_NAME_TEMPL)"
     outFileZ="${outFile}.${COMPRESS_EXT}"
 # Check whether target CSV file or its compressed representation exists and it is not empty
     [[ ( -f $outFile && $(stat -c %s $outFile) -gt 0 ) || \
@@ -157,18 +175,22 @@ local FE tmp_
     esac
     if (( $(stat -c %s $tmp_) )); then
      mv "${tmp_}" "$outFile"
-# mktemp always set access mask = 0600
+# mktemp always set access mask to 0600
      chmod 644 "$outFile"
-     if (( FL_ZIP_OUT )) && eval "${COMPRESS_CMD//%OUT_FILE%/$outFile}"; then
-      chmod 644 "${outFile}.${COMPRESS_EXT}"
-      rm -f "$outFile"
-     fi
     else
      rm -f "${tmp_}"
     fi    
-    (( FL_CLEAN_RAW_FILE )) && rm -f "$grb2File"
    done
   done 
  done <$MPARS_LIST_PATH
+ 
+ cd "$pthCooked"
+ (( FL_ZIP_OUT )) && \
+  ls *.${OUT_EXT} | parallel gzip 2>/dev/null
+ 
+ cd "$pthRaw"
+ (( FL_CLEAN_RAW_FILE )) && \
+  ls *.grb2 | parallel -m rm -f {} 2>/dev/null
+ 
  return 0
 }
