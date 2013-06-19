@@ -73,19 +73,30 @@ done
 GRID_COLS=$( bc <<<"($MAX_LON-$MIN_LON)/$GRID_STEP+1" )
 GRID_ROWS=$( bc <<<"($MAX_LAT-$MIN_LAT)/$GRID_STEP+1" )
 
+unset getLatestDataTS doCollectCSV
+
 getLatestDataTS () {
-local TS
-  TS=$(wget -q "$HELPER" -O - 2>/dev/null | \
-   sed 's%<a href%\n&%g' | \
-    sed -nr 's%^<a href="'"${HELPER//./\\.}"'\?dir=\%2Fgfs\.(20(1[2-9]|[2-9][0-9])[0-9]{6})">gfs\.\1</a>.*$%\1%p' | \
-     sort -rn | head -1)
-  if ! wget -q "$HELPER?dir=%2Fgfs.${TS}" -O - 2>/dev/null | fgrep -q '>master</a>'; then
+local TS nl=1 Where=${1^^}
+ case ${Where:-NCEP} in
+ NCEP)
+  while :; do
    TS=$(wget -q "$HELPER" -O - 2>/dev/null | \
     sed 's%<a href%\n&%g' | \
      sed -nr 's%^<a href="'"${HELPER//./\\.}"'\?dir=\%2Fgfs\.(20(1[2-9]|[2-9][0-9])[0-9]{6})">gfs\.\1</a>.*$%\1%p' | \
-      sort -rn | head -2 | sed '1d')
-  fi
-  echo "$TS"    
+      sort -rn | sed -n "${nl}{ p; q; }")
+   [[ ${PIPESTATUS[0]} -eq 0 && $TS ]] || return 1
+   wget -q "$HELPER?dir=%2Fgfs.${TS}" -O - 2>/dev/null | fgrep -q '>master</a>' && break
+   (( nl++ ))
+  done
+ ;;
+ DCOLL)
+  maxDay=$(ls $GFS_CSV_PATH | sed -nr '/^[0-9]{8}$/p' | sort -rn | head -1)
+  [[ $maxDay ]] || return 1
+  TS=$(ls "$GFS_CSV_PATH/$maxDay" | sed -nr "s%^(.*_)?(${maxDay})_([0-9]{2})00_.*$%\2\3%p" | sort -rn | head -1)
+ ;;
+ *) return 1 ;; 
+ esac
+ echo -n "$TS"
  return 0
 }
 
