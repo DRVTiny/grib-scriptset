@@ -44,6 +44,7 @@ dflt[COMPRESS_CMD]="gzip -{{COMPRESS_LEVEL}} '%OUT_FILE%'"
 dflt[FL_CLEAN_RAW_DIR]=0
 dflt[FL_CLEAN_CSV_DIR]=0
 dflt[FL_CLEAN_RAW_FILE]=0
+dflt[FL_SET_LOCK]=0
 # For compatibility only ->
 dflt[FL_CLEAN_RAW]=0
 dflt[FL_CLEAN_CSV]=0
@@ -109,17 +110,22 @@ local FE tmp_ PID
  pthCooked="${GFS_CSV_PATH}/${YMD}"
  pthRaw="${GFS_RAW_PATH}/${YMD}"
  
- if [[ -f ${pthCooked}.pid ]]; then
-  PID=$(<${pthCooked}.pid)  
-  if [[ $PID =~ ^[0-9]+$ && -f /proc/$PID/cmdline ]] 2>/dev/null; then
-   echo "Directory ${pthCooked} seems to be locked by process [$PID], we have nothing to do here" >&2
-   return 1
+ if [[ $FL_SET_LOCK -gt 0 ]]; then
+  if [[ -f ${pthCooked}.pid ]]; then
+   PID=$(<${pthCooked}.pid)  
+   if [[ $PID =~ ^[0-9]+$ && -f /proc/$PID/cmdline ]] 2>/dev/null; then
+    msg="Directory ${pthCooked} seems to be locked by process [$PID], we have nothing to do here"
+    declare -f error_ &>/dev/null && \
+     error_ "$msg"  || \
+     echo "$msg" >&2
+    return 1
+   else
+    rm -f ${pthCooked}.pid
+   fi
   else
-   rm -f ${pthCooked}.pid
+   echo "$$" > ${pthCooked}.pid
+   trap "rm -f ${pthCooked}.pid" SIGINT SIGTERM SIGHUP SIGQUIT EXIT
   fi
- else
-  echo "$$" > ${pthCooked}.pid
-  trap "rm -f ${pthCooked}.pid" SIGINT SIGTERM SIGHUP SIGQUIT EXIT
  fi
  
  OUT_FORMAT=${OUT_FORMAT^^}
