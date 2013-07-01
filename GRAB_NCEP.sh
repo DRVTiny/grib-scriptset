@@ -41,6 +41,6 @@ if [[ $1 ]]; then
  done
  wait4_all_gone
 else
- (( $(getLatestDataTS ncep) > $(getLatestDataTS dcoll) )) && \
+# (( $(getLatestDataTS ncep) > $(getLatestDataTS dcoll) )) && \
   doCollectCSV 
 fi
