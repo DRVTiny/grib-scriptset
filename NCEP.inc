@@ -81,7 +81,7 @@ local TS nl=1 Where=${1^^}
  case ${Where:-NCEP} in
  NCEP)
   while :; do
-   TS=$(wget -q "$HELPER" -O - 2>/dev/null | \
+   TS=$(timeout 10s wget -q "$HELPER" -O - 2>/dev/null | \
     sed 's%<a href%\n&%g' | \
      sed -nr 's%^<a href="'"${HELPER//./\\.}"'\?dir=\%2Fgfs\.(20(1[2-9]|[2-9][0-9])[0-9]{6})">gfs\.\1</a>.*$%\1%p' | \
       sort -rn | sed -n "${nl}{ p; q; }")
@@ -114,7 +114,7 @@ local FE tmp_ PID
  (( FL_CLEAN_CSV_DIR || FL_CLEAN_CSV )) && \
   { rm -rf $GFS_CSV_PATH && mkdir -p $GFS_CSV_PATH; }
  [[ $1 =~ ^([0-9]{10})?$ ]] || return 1 
- TS="${1:-$(getLatestDataTS)}" 
+ TS="${1:-$(getLatestDataTS)}" || return 1
 
  YMD=${TS:0:8}; HH=${TS:8:2}
  mkdir -p {$GFS_RAW_PATH,$GFS_CSV_PATH}/${YMD}
