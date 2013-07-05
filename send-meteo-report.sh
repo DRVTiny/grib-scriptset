@@ -20,11 +20,12 @@ fi
 echo $$ > $LOCK_FILE
 trap "rm -f $LOCK_FILE" SIGINT SIGTERM SIGHUP
 
-while getopts 'e: a: xE' key; do
+while getopts 'e: a: xEC' key; do
  case $key in
   e) emailTO="$OPTARG"  ;;
   a) areaID="$OPTARG"   ;;
   E) mode='-m extended' ;;
+  C) flDeleteCSV=1	;;
   x) set -x 	        ;;
   \?|*) doShowUsage; exit 1 ;;
  esac
@@ -44,7 +45,7 @@ confArea="${USER_HOME}/conf/report/${areaID,,}.ini"
  exit 2
 }
 
-REPORT_DATES=$(date +%d.%m.%Y) order_point_fc.sh -C -i ${areaID^^} -f "$confArea" -e "${emailTO}/{{REPORT_DATES}}: See weather report for area '$areaID' inside" $mode
+REPORT_DATES=$(date +%d.%m.%Y) order_point_fc.sh ${flDeleteCSV:+-C} -i ${areaID^^} -f "$confArea" -e "${emailTO}/{{REPORT_DATES}}: See weather report for area '$areaID' inside" $mode
 RETVAL=$?
 rm -f $LOCK_FILE
 exit $RETVAL

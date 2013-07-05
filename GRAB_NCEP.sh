@@ -5,11 +5,13 @@ source /opt/scripts/functions/debug.func
 source /opt/scripts/functions/parex.inc
 log_open /var/log/grib/grab_ncep.log
 ID='rostov-on-don'
-while getopts 'xTA:' key; do
+unset SfxNCEP
+while getopts 'xpTA:' key; do
  case $key in
   A) ID="$OPTARG" ;;
   x) export DEBUG=1; set -x ;; 
   T) flTestOut=1 ;;
+  p) SfxNCEP='Par' ;;
   \?|*) fatal_ "Unknown key passed to me: $key"; exit 1 ;;
  esac
 done
@@ -21,7 +23,9 @@ GFS_CUSTOM_PARS="/etc/grib/$ID.inc"
  exit 1
 }
 
-source ${USER_HOME:=$(getent passwd $(whoami) | cut -d: -f6)}/bin/grib-scriptset/NCEP.inc
+# ParNCEP.inc is a copy of NCEP.inc with paralellized code of internal loop inside doCollectCSV function
+
+source ${USER_HOME:=$(getent passwd $(whoami) | cut -d: -f6)}/bin/grib-scriptset/${SfxNCEP}NCEP.inc
 if [[ $1 ]]; then
  startDate=$1; shift
  endDate=${1:-$(getLatestDataTS)}; shift
