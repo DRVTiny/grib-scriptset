@@ -38,6 +38,7 @@ dflt[WFC_STEP_H]=3
 dflt[GRB2_NAME_TEMPL]='<nomacro>gfs_4_{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.grb2'
 dflt[COOKED_NAME_TEMPL]='<nomacro>gfs_4_{{YMD}}_{{HH}}00_{{si}}_{{METEOPAR}}-{{METEOPAR_COND}}.{{OUT_EXT}}'
 dflt[OUT_FORMAT]='CSV'
+dflt[OUT_EXT]='SEE_OUT_FORMAT'
 dflt[FL_ZIP_OUT]=1
 dflt[COMPRESS_LEVEL]=8
 dflt[COMPRESS_CMD]="gzip -{{COMPRESS_LEVEL}} '%OUT_FILE%'"
@@ -52,6 +53,9 @@ dflt[FL_CLEAN_CSV]=0
 
 declare -A FORMAT_EXT=([CSV]='csv' [NETCDF]='nc' [GRIB2]='grb2')
 declare -A ZIP_EXT=([gzip]=gz [bzip2]=bz2 [7za]=7z [compress]=Z [zip]=zip)
+
+declare -p NotInRA &>/dev/null || \
+ source $(dirname $(readlink -e -- "$0") 2>/dev/null || echo -n '.')/reanalyze_excl.inc
 CONF_KEYS="${!dflt[@]}"
 
 for v in $CONF_KEYS; do
@@ -74,6 +78,18 @@ done
 GRID_COLS=$( bc <<<"($MAX_LON-$MIN_LON)/$GRID_STEP+1" )
 GRID_ROWS=$( bc <<<"($MAX_LAT-$MIN_LAT)/$GRID_STEP+1" )
 
+OUT_FORMAT=${OUT_FORMAT^^}
+if [[ $OUT_EXT='SEE_OUT_FORMAT' ]]; then
+ OUT_EXT=${FORMAT_EXT[${OUT_FORMAT}]}
+ [[ $OUT_EXT ]] || { 
+  echo "Sorry, we dont know, how to work with output format \"$OUT_FORMAT\" yet" >&2
+  jhjhjhjhjj
+ }
+fi
+
+[[ $FL_ZIP_OUT == 1 && ! $COMPRESS_EXT ]] && \
+ COMPRESS_EXT=${ZIP_EXT["${COMPRESS_CMD%%[[:space:]]*}"]:-zip}
+ 
 unset getLatestDataTS doCollectCSV
 if ! declare -f push_task &>/dev/null; then 
  source /opt/scripts/functions/parex.inc || {
@@ -113,22 +129,25 @@ local l a=(); declare -i la
 local grb2File outFile outPath outPazz
 local i si
 local PID pidLock
-local TS
-local ERC=100 
+local TS YMD HH
+local pthCooked pthCookedWork pthCookedDest pthRaw
+local ERC=100
+local METEOPAR METEOPAR_COND H_DIA
  (( FL_CLEAN_RAW_DIR || FL_CLEAN_RAW )) && \
   { rm -rf $GFS_RAW_PATH && mkdir -p $GFS_RAW_PATH; }
  (( FL_CLEAN_CSV_DIR || FL_CLEAN_CSV )) && \
   { rm -rf $GFS_CSV_PATH && mkdir -p $GFS_CSV_PATH; }
- [[ $1 =~ ^([0-9]{10})?$ ]] || return $((++ERC))
  
  TS="${1:-$(getLatestDataTS)}" || return $((++ERC))
-
- local YMD=${TS:0:8}
- local HH=${TS:8:2}
  
- local pthCookedWork="${GFS_CSV_PATH}/WD/${YMD}${HH}"
- local pthCookedDest="${GFS_CSV_PATH}/${YMD}"
- local pthRaw="${GFS_RAW_PATH}/${YMD}"
+ [[ $TS =~ ^20[0-9]{8}$ ]] || return $((++ERC))
+
+ YMD=${TS:0:8}
+ HH=${TS:8:2}
+
+ pthCookedWork="${GFS_CSV_PATH}/WD/${YMD}${HH}"
+ pthCookedDest="${GFS_CSV_PATH}/${YMD}"
+ pthRaw="${GFS_RAW_PATH}/${YMD}"
  
  mkdir -p $pthCookedWork $pthCookedDest $pthRaw
  
@@ -146,17 +165,10 @@ local ERC=100
   fi
  else
   echo "$$" > $pidLock
-  trap "rm -f $pidLock" SIGINT SIGTERM SIGHUP SIGQUIT EXIT
+  trap "rm -f $pidLock" EXIT
  fi
  
- OUT_FORMAT=${OUT_FORMAT^^}
- OUT_EXT=${FORMAT_EXT[${OUT_FORMAT}]}
- [[ $OUT_EXT ]] || { 
-  echo "Sorry, we dont know, how to work with output format \"$OUT_FORMAT\" yet" >&2
-  return $((++ERC))
- }
- 
- [[ $FL_ZIP_OUT == 1 && ! $COMPRESS_EXT ]] && COMPRESS_EXT=${ZIP_EXT["${COMPRESS_CMD%%[[:space:]]*}"]:-zip}
+# trap rotate_tq SIGUSR1
  
  while read l; do
   IFS=':' read -a a <<<"${l// /_}"
@@ -164,7 +176,6 @@ local ERC=100
   METEOPAR=${a[la-1]}
   METEOPAR_COND=${a[la]}
   
-  trap rotate_tq SIGUSR1
   for H_DIA in ${WFC_PREDICT_H_DIA:=000..${WFC_PREDICT_H}..${WFC_STEP_H}}; do
    for si in $(eval "echo {${H_DIA}}"); do
 # si = Hours of prediction, format (ex.): 004, 015, 180  
@@ -174,23 +185,23 @@ local ERC=100
 # Note: As you can see, "grb2 extension is hardcoded, as of now you cant use other extension for raw files
 
 # EOPOC is the End Of Piece Of Code :)
-    push_task -c <<'EOPOC'
+    push_task <<'EOPOC'
 # LOOP BODY, parallelized ->
      exit_ () {
-      kill -USR1 $$
+#      kill -USR1 $$
       kill $BASHPID
       return 0
      }
-     grb2File="$pthRaw/$(doMacroSubst GRB2_NAME_TEMPL)"
      
+     grb2File="$pthRaw/$(doMacroSubst GRB2_NAME_TEMPL)"     
      outFile="$(doMacroSubst COOKED_NAME_TEMPL)"
-     outPath="$pthCookedDest/$outFile"
-     outPazz="${outPath}.${COMPRESS_EXT}"
      
  # Check whether target CSV file or its compressed representation exists and it is not empty
-     [[ ( -f $outPath && $(stat -c %s $outPath) -gt 0 ) || \
-        ( $FL_ZIP_OUT == 1 && -f $outPazz && $(stat -c %s $outPazz) -gt 0 ) \
-     ]] && exit_
+     for pthCooked in $pthCookedDest $pthCookedWork; do
+      for outPath in "$pthCooked/$outFile"{,.${COMPRESS_EXT}}; do
+       [[ -f $outPath && $(stat -c %s $outPath) -gt 0 ]] && exit_
+      done
+     done
           
      if ! [[ -f $grb2File ]]; then
       [[ $si =~ ^0?([0-9]{2,3})$ ]]
@@ -201,6 +212,8 @@ local ERC=100
        rm -f "$grb2File"
        exit_
       fi     
+     else
+      echo "Hmmm... Raw (grib) file $grb2File already exists" >&2
      fi
      
      outPath="$pthCookedWork/$outFile"
@@ -210,30 +223,77 @@ local ERC=100
       ;;
       CSV)       
        wgrib2 "$grb2File" | \
-        wgrib2 "$grb2File" -i -lola $MIN_LON:$GRID_COLS:$GRID_STEP $MIN_LAT:$GRID_ROWS:$GRID_STEP $outPath spread
+        wgrib2 "$grb2File" -i -lola $MIN_LON:$GRID_COLS:$GRID_STEP $MIN_LAT:$GRID_ROWS:$GRID_STEP "$outPath" spread
       ;;
       *) echo "Unknown output format: $OUT_FORMAT" >&2 ;;
      esac
-     kill -USR1 $$
+#     kill -USR1 $$
 # <- LOOP BODY, parallelized
 EOPOC
    done
   done
  done <$MPARS_LIST_PATH
  
- trap '' SIGUSR1
+# trap '' SIGUSR1
  wait4_all_gone
   
  cd "$pthCookedWork"
- (( FL_ZIP_OUT )) && \
-  ls *.${OUT_EXT} | parallel gzip 2>/dev/null
  
- cd "$pthRaw"
- (( FL_CLEAN_RAW_FILE )) && \
-  ls *.grb2 | parallel -m rm -f {} 2>/dev/null
+ (( FL_ZIP_OUT )) && { find $pthCookedWork/ -maxdepth 1 -mindepth 1 -type f -name '*.csv'   | parallel gzip -7; }
  
- find "${pthCookedWork}/" -maxdepth 1 -mindepth 1 -type f | parallel -m mv {} $pthCookedDest/ \; 
+ (( FL_CLEAN_RAW_FILE )) && { find $pthRaw/ -maxdepth 1 -mindepth 1 -type f -name '*.grb2'  | parallel -m rm -f; }
+ 
+ find "${pthCookedWork}/" -maxdepth 1 -mindepth 1 -type f -name '*.csv' -o -name '*.csv.gz' | parallel -m mv {} $pthCookedDest/ \; 
  rm -rf $pthCookedWork
  
  return 0
+}
+
+chkAllDataInPlace () {
+local mpline INV TS METEOPAR METEOPAR_COND 
+local H_DIA si
+declare -a FileNotFound
+declare -i N
+ TS="${1:-$(getLatestDataTS)}" || {
+  echo 'Cant get current timestamp (probably request to server timeout occured)' >&2
+  return 1
+ }
+ [[ $TS =~ ^20[0-9]{8}$ ]] || {
+  echo "We've got invalid timestamp: '$TS' instead of something like 2013071200" >&2
+  return 2
+ }
+ 
+ local YMD=${TS:0:8}
+ local HH=${TS:8:2}
+    
+ [[ -d "$GFS_CSV_PATH/$YMD" ]] || {
+  echo "Cooked directory for prediction timestamp $TS is absent" >&2
+  return 3
+ }
+ cd "$GFS_CSV_PATH/$YMD"
+ while read -r mpline; do
+  IFS=':' read -a INV <<<"${mpline// /_}"
+  N=${#INV[@]}-1
+  METEOPAR=${INV[N-1]}
+  METEOPAR_COND=${INV[N]}
+  for H_DIA in ${WFC_PREDICT_H_DIA:=000..${WFC_PREDICT_H}..${WFC_STEP_H}}; do
+   for si in $(eval "echo {${H_DIA}}"); do  
+    outFile=$(doMacroSubst COOKED_NAME_TEMPL)
+    [[ $si == '000' && ${NotInRA["${METEOPAR}-${METEOPAR_COND}"]} ]] && continue
+    if [[ -f $outFile || -f $outFile.${COMPRESS_EXT} ]]; then
+     [[ -f $outFile ]] || outFile+=".${COMPRESS_EXT}"
+     if (( $(stat -c %s "$outFile") )); then
+      continue
+     else
+      echo "$outFile exists but it is empty" >&2
+     fi
+    else
+     echo "$outFile is absent" >&2
+    fi
+    FileNotFound+=($outFile)
+   done
+  done
+ done <$MPARS_LIST_PATH
+ declare -p FileNotFound
+ return ${#FileNotFound[@]}
 }
