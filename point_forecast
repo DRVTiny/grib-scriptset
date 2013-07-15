@@ -110,7 +110,7 @@ for lola in $points; do
   if [[ $max_pred_hours =~ ^0*([0-9]+)$ ]]; then
    max_pred_hours=${BASH_REMATCH[1]}
   else
-   eval "printf ',99999%.0s' {0..${order_pred_hours}..3}"; echo
+   eval "printf ',$UNDEF%.0s' {0..${order_pred_hours}..3}"; echo
    continue
   fi
   pred_hours=$order_pred_hours
@@ -118,7 +118,7 @@ for lola in $points; do
   start_pred_hour=0
   if [[ ${NotInRA["$mp"]} ]]; then
    start_pred_hour=3
-   echo -n ',99999'
+   echo -n ",$UNDEF"
   fi
   csv_row=''
   for si in $(seq -f '%03g' ${start_pred_hour} 3 ${pred_hours}); do
@@ -127,14 +127,14 @@ for lola in $points; do
     gzip -d "$csvSource.gz" 2>/dev/null
     
    if [[ -f "$csvSource" ]]; then    
-    csv_row+=$(sed -nr "s%^${lon},\s*${lat},\s*([^,]+),?\s*$%,\1%"'; T lbl; p; q; :lbl; $s%.*%,99999%p' "$csvSource")
+    csv_row+=$(sed -nr "s%^${lon},\s*${lat},\s*([^,]+),?\s*$%,\1%"'; T lbl; p; q; :lbl; $s%.*%,'$UNDEF'%p' "$csvSource")
    else
-    csv_row+=',99999'
+    csv_row+=",$UNDEF"
    fi
   done
   echo -n "$csv_row"
   (( max_pred_hours<order_pred_hours )) && \
-   eval "printf ',99999%.0s' {$((pred_hours+3))..${order_pred_hours}..3}"
+   eval "printf ',$UNDEF%.0s' {$((pred_hours+3))..${order_pred_hours}..3}"
   echo
  done
  exec 1<&3

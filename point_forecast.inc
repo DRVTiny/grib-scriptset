@@ -1,4 +1,4 @@
-
+declare -r -i UNDEF=9999999
 if (( flReCompileHashes )); then
  declare  -A MP2LBL
  case ${mode=standart} in
