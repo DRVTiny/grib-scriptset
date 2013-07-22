@@ -9,6 +9,7 @@ my $emailTO;
 my $emailFROM='ak@namos.ru';
 my $txtSubject='You get a file';
 
+$ARGV[0]='--help' unless @ARGV;
 my $ret_ = new Getopt::Compact
  ( name => 'mailfile.pl', version => '0.01', modes => [qw(debug)],
    struct => [ [ [qw(f file)],      qq(specify a file to send as an attachment to your message), '=s', \$pthFile    ],
