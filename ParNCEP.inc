@@ -123,6 +123,15 @@ local TS nl=1 Where=${1^^}
  return 0
 }
 
+getGFSVarsAvail () {
+ local TS=${1:-$(getLatestDataTS)}
+ timeout 10s wget -q "$HELPER?dir=%2Fgfs.${TS}%2Fmaster" -O - | \
+  sed -nr '/Select the variables desired/,/File transfer times can be reduced/{ s/\<name="(var_[^"]+)"/\n\1\n/gp }' | \
+   sed -n 's%^var_%%p' | \
+    sort
+ return ${PIPESTATUS[0]}
+}
+
 doCollectCSV () {
 local flConvert2NetCDF=0 flDontDeleteRaw=0
 local l a=(); declare -i la
