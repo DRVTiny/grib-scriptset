@@ -16,8 +16,7 @@ while getopts 'xpTA:l:' key; do
   l) LOG_FILE="$OPTARG" ;;
   T) flTestOut=1 ;;
   p) SfxNCEP='Par' 
-     info_ 'We will use';;
-  
+     info_ 'We will use parallelized version of NCEP.inc';;  
   \?|*) fatal_ "Unknown key passed to me: $key"; exit 1 ;;
  esac
 done
