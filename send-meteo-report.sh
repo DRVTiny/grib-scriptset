@@ -3,7 +3,7 @@ declare -A slf=([NAME]="${0##*/}" [PATH]="$0" [DIR]="${0%/*}")
 
 doShowUsage () {
  cat <<EOF
-${slf[NAME]} -e SEND_EMAIL_TO -a AREA_ID [-x] [-E]
+${slf[NAME]} -e SEND_EMAIL_TO -a AREA_ID [-d 15.11.2013] [-x] [-E] 
 EOF
  return 0
 }
@@ -20,13 +20,14 @@ fi
 echo $$ > $LOCK_FILE
 trap "rm -f $LOCK_FILE" SIGINT SIGTERM SIGHUP
 
-while getopts 'e: a: xEC' key; do
+while getopts 'a: d: e: xEC' key; do
  case $key in
+  d) Date2Rep="$OPTARG" ;;
   e) emailTO="$OPTARG"  ;;
   a) areaID="$OPTARG"   ;;
   E) mode='-m extended' ;;
   C) flDeleteCSV=1	;;
-  x) set -x 	        ;;
+  x) set -x; DEBUG=1    ;;
   \?|*) doShowUsage; exit 1 ;;
  esac
 done
@@ -45,7 +46,7 @@ confArea="${USER_HOME}/conf/report/${areaID,,}.ini"
  exit 2
 }
 
-REPORT_DATES=$(date +%d.%m.%Y) order_point_fc.sh ${flDeleteCSV:+-C} -i ${areaID^^} -f "$confArea" -e "${emailTO}/{{REPORT_DATES}}: See weather report for area '$areaID' inside" $mode
+REPORT_DATES=${Date2Rep:=$(date +%d.%m.%Y)} order_point_fc.sh ${flDeleteCSV:+-C} -i ${areaID^^} -f "$confArea" -e "${emailTO}/{{REPORT_DATES}}: See weather report for area '$areaID' inside" $mode
 RETVAL=$?
 rm -f $LOCK_FILE
 exit $RETVAL
