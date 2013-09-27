@@ -1,0 +1,61 @@
+sub dbgShowHsh {
+ my ($H,$L,$K)=@_;
+ if ($K ne undef) {
+  print 'FMBH;'.join(';',@{$K})."\n".$_.';'.join(';',@{$H->{$_}}{@{$K}})."\n" foreach @{$L};
+ } else {
+  foreach my $lbl ( @{$L} ) {
+   my @t=sort { $a<=>$b } keys %{$H->{$lbl}};
+   print 'FMBH;'.join(';',@t)."\n".$lbl.';'.join(';',@{$H->{$lbl}}{@t})."\n";
+  }
+ }
+}
+
+sub getFactPreDelta {
+ my ($mp,$factV,$predV)=@_;
+ return(9999999) unless ( ($factV ne undef) and ($predV ne undef) );
+ my $d=$factV-$predV;
+ if ($mp=~m/^(?:WINDD|APCP)/) {
+  $d=abs($d);
+  return nearest(0.01,($d>180?180-$d:$d)) if ($mp eq 'WINDD');
+ }
+ return nearest(0.01,$d);
+}
+
+sub cnvFactT {
+ my $T=shift;
+ return defined($T)?$T+ZEROC:undef;
+}
+
+sub cnvFactPres {
+ my $P=shift;
+ return defined($P)?$P*100:undef;
+}
+
+sub fmbh2date {
+ my ($Year,$Month,$fmbh)=@_;
+ return ( map { sprintf('%02g',$_) } (Add_Delta_Days($Year,$Month,1,int($fmbh/24)),$fmbh%24) );
+}
+
+sub BASHArr2List { 
+ my $ArrDef=shift; chomp $ArrDef;
+ my ($ArrName)=($ArrDef=~m/^declare -a ([^=]+)=/);
+ $ArrDef=~s%(?:^declare -a ${ArrName}='\(|\)'$)%%g;
+ $ArrDef=~s%(\[[0-9]+\]="[^"]+")\s*%\$${ArrName}$1;\n%g;
+ chomp $ArrDef;
+ return ($ArrName,$ArrDef);
+}
+
+sub approx2grid {
+  my ($pLat,$pLon,$GridStepLat,$GridStepLon)=@_;
+  my $lonLeft=int($pLon/$GridStepLon)*$GridStepLon;
+  my $lonRight=$lonLeft+$GridStepLon;
+  my $latDown=int($pLat/$GridStepLat)*$GridStepLat;
+  my $latUp=$latDown+$GridStepLat;
+  return ( {lat=>$latUp,lon=>$lonLeft},
+           {lat=>$latUp,lon=>$lonRight},
+           {lat=>$latDown,lon=>$lonRight},
+           {lat=>$latDown,lon=>$lonLeft}
+         );
+}
+
+return 1;
