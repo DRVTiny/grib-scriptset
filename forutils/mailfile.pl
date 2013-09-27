@@ -7,7 +7,7 @@ use MIME::Lite;
 my $pthFile;
 my $emailTO;
 my $emailFROM='ak@namos.ru';
-my $txtSubject='You get a file';
+my $txtSubject="You've got a file";
 
 my $ret_ = new Getopt::Compact
  ( name => 'mailfile.pl', version => '0.01', modes => [qw(debug)],
