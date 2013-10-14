@@ -13,10 +13,10 @@ sub dbgShowHsh {
 sub getFactPreDelta {
  my ($mp,$factV,$predV)=@_;
  return(9999999) unless ( ($factV ne undef) and ($predV ne undef) );
- my $d=$factV-$predV;
+ my $d=$predV-$factV;
  if ($mp=~m/^(?:WINDD|APCP)/) {
   $d=abs($d);
-  return nearest(0.01,($d>180?180-$d:$d)) if ($mp eq 'WINDD');
+  return nearest(0.01,($d>180?360-$d:$d)) if ($mp eq 'WINDD');
  }
  return nearest(0.01,$d);
 }

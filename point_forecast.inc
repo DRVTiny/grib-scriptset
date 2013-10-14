@@ -3,7 +3,7 @@ if (( flReCompileHashes )); then
  declare  -A MP2LBL
  case ${mode=standart} in
  standart)
-  for mp in 'TCDC-entire_atmosphere_(considered_as_a_single_layer)' {PRES,GUST,APCP,CSNOW,CRAIN,CICEP,CFRZR}-surface; do
+  for mp in TCDC-entire_atmosphere_\(considered_as_a_single_layer\) {PRES,GUST,APCP,CSNOW,CRAIN,CICEP,CFRZR}-surface; do
    MP2LBL["$mp"]="${mp%%-*}"
   done
 
@@ -53,61 +53,62 @@ else
 fi
 
 source $(dirname $(readlink -e "$0"))/reanalyze_excl.inc
-                                                                
-case ${mode=standart} in
-standar[td])
- declare -a LBLOrder=(
-                 'PRES'
-                 'TCDC'
-                 'CSNOW'
-                 'CRAIN'
-                 'CICEP'
-                 'CFRZR'
-                 'APCP'
-                 'GUST'
-                 'V500'
-                 'V700'
-                 'V850'
-                 'V10m'
-                 'U500'
-                 'U700'
-                 'U850'
-                 'U10m'
-                 'RH500'
-                 'RH700'
-                 'RH850'
-                 'RH2m'
-                 'T500'
-                 'T700'
-                 'T850'
-                 'Tmax'
-                 'Tmin'
-                 'T'
- )
-;;
-extended)
- declare -a LBLOrder=(
-                 'PRES'
-                 'TCDC'
-                 'CSNOW'
-                 'CRAIN'
-                 'CICEP'
-                 'CFRZR'
-                 'APCP'
-                 'GUST'
-                 V{{100..900..50},{925..975..25}}
-                 'V10m'
-                 U{{100..900..50},{925..975..25}}
-                 'U10m'
-		 RH{{100..900..50},{925..975..25}}
-                 'RH2m'
-                 T{{100..900..50},{925..975..25}}
-                 'Tmax'
-                 'Tmin'
-                 'T'
-		 HGT{{100..900..50},{925..975..25}}
-		 VVEL{{100..900..50},{925..975..25}}
-		 'WEASD'
- )
-;;
-esac
+if ! [[ ${LBLOrder[@]} ]]; then 
+ case ${mode=standart} in
+ standar[td])
+  declare -a LBLOrder=(
+                  'PRES'
+                  'TCDC'
+                  'CSNOW'
+                  'CRAIN'
+                  'CICEP'
+                  'CFRZR'
+                  'APCP'
+                  'GUST'
+                  'V500'
+                  'V700'
+                  'V850'
+                  'V10m'
+                  'U500'
+                  'U700'
+                  'U850'
+                  'U10m'
+                  'RH500'
+                  'RH700'
+                  'RH850'
+                  'RH2m'
+                  'T500'
+                  'T700'
+                  'T850'
+                  'Tmax'
+                  'Tmin'
+                  'T'
+  )
+ ;;
+ extended)
+  declare -a LBLOrder=(
+                  'PRES'
+                  'TCDC'
+                  'CSNOW'
+                  'CRAIN'
+                  'CICEP'
+                  'CFRZR'
+                  'APCP'
+                  'GUST'
+                  V{{100..900..50},{925..975..25}}
+                  'V10m'
+                  U{{100..900..50},{925..975..25}}
+                  'U10m'
+                  RH{{100..900..50},{925..975..25}}
+                  'RH2m'
+                  T{{100..900..50},{925..975..25}}
+                  'Tmax'
+                  'Tmin'
+                  'T'
+                  HGT{{100..900..50},{925..975..25}}
+                  VVEL{{100..900..50},{925..975..25}}
+                  'WEASD'
+  )
+ ;;
+ esac
+fi

@@ -17,9 +17,16 @@ my @inCSV = split(/${delim}/, $lstCSVFiles);
 my $wb = Spreadsheet::WriteExcel->new($pthXLSFile);
 
 for my $csv (@inCSV) {
-        print "Processing ${csv}...\n";
-        my ($idWorkSheet) = ($csv =~ m%^(?:/?(?:[^/]+/)*)?([^/]+)\.[^\.]+$%);
-        next unless $idWorkSheet;
+        my $idWorkSheet=undef;
+        if ($csv=~m/^(.+?):::(.+)$/) {
+         $csv=$1;
+         $idWorkSheet=$2;
+        }
+        
+        #print "Processing ${csv}...\n";
+        
+        ($idWorkSheet) = ($csv =~ m%^(?:/?(?:[^/]+/)*)?([^/]+)\.[^\.]+$%) unless $idWorkSheet ne undef;
+        next unless $idWorkSheet ne undef;
         open (CSV, $csv) || die ("Could not open source file ${csv}!");
         my $sh = $wb->add_worksheet($idWorkSheet);
         

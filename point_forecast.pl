@@ -24,14 +24,24 @@ my $MONTH_REGEX='(?:0[1-9]|1[0-2])';
 my $YEAR_REGEX='20(?:[2-9][0-9]|1[2-9])';
 my $YMD_REGEX="^(${YEAR_REGEX})[-._]?(${MONTH_REGEX})[-._]?(${DAY_REGEX})\$";
 my $YM_REGEX="^(${YEAR_REGEX})[-._]?(${MONTH_REGEX})\$";
+my %StaDim=( 'Rostov-On-Don'=>{lat=>47.3,lon=>39.8,alt=>75,area=>'rostov-on-don-short'},
+             'Taganrog'=>{lat=>47.2,lon=>38.9,alt=>32,area=>'rostov-on-don-short'},
+             'Tsimlyansk'=>{lat=>47.6,lon=>42.1,alt=>65,area=>'rostov-on-don-short'},
+             'Remontnoe'=>{lat=>46.6,lon=>43.7,alt=>106,area=>'rostov-on-don-short'},
+             'Giant'=>{lat=>46.5,lon=>41.3,alt=>79,area=>'rostov-on-don-short'},
+             'Kazanskaya'=>{lat=>49.8,lon=>41.2,alt=>72,area=>'rostov-on-don-short'},
+             'Millerovo'=>{lat=>48.9,lon=>40.4,alt=>155,area=>'rostov-on-don-short'},
+             'Konstantinovsk'=>{lat=>47.6,lon=>41.1,alt=>66,area=>'rostov-on-don-short'} );
 #=</CONST>
 
 #=<GLOBAL>
-my (%fact,%comp);
+my (%fact,%comp,%diff);
 #=</GLOBAL>
 
 #=<ARGS>
-my ($areaID,$StationID,$pLat,$pLon,$YearMonth)=@ARGV;
+my ($StationID,$YearMonth)=@ARGV;
+die 'Unknown station ID' unless defined $StaDim{$StationID};
+my ($areaID,$pLat,$pLon)=( $StaDim{$StationID}{area}, $StaDim{$StationID}{lat}, $StaDim{$StationID}{lon} );
 my ($Year,$Month)=($YearMonth=~m/^${YM_REGEX}/);
 my $DaysInMonth=Days_in_Month($Year,$Month);
 #=</ARGS>
@@ -60,6 +70,7 @@ close(AREACONF);
 $areaConf{MPARS_LIST_FILE}=FILTERS_DIR.'/'.$areaConf{MPARS_LIST_FILE} if (index($areaConf{MPARS_LIST_FILE},'/')<0);
 my $DATA_ID=$areaConf{DATA_ID};
 my $MAX_PRED_H=$areaConf{WFC_PREDICT_H} || 120;
+my $STEP_PRED_H=$areaConf{WFC_STEP_H} || 3;
 #=</AREACONF>
 
 #=<FILTERFILE>
@@ -121,22 +132,27 @@ push @LBLOrder,('APCP12','dayTmax','dayTmin');
 #my %fact;
 my @mpidsFact= grep(!/(HOUR|DATE)/, keys %dscFactCSV);
 my @mpidsOut=grep { my $t=$_; grep { $t eq $_ } @mpidsFact } @LBLOrder;
-my $factFile=FACT_BASE_DIR."/${Year}${Month}/${StationID}.csv";
+my $factFile=FACT_BASE_DIR."/${Year}${Month}/${StationID}_${Year}${Month}.csv";
 open (FACT,'<',$factFile) || die "Cant open fact file ${factFile}: ".$!;
 $_=<FACT>;
 #$monthFilter="^[0-9]+;${DAY_REGEX},${Month},".substr($Year,2,2).';';
 #foreach ( grep /${monthFilter}/,(<FACT>) ) {
-my $fmbh;
+my ($fmbh,$fdsh);
 while (<FACT>) {
  my @l=split /\;/;
- my ($D,$M,$Y)=split(/,/,$l[$dscFactCSV{DATE}->{COL}]);
- if ($M eq $Month) {
-  $fmbh=($D-1)*24+$l[$dscFactCSV{HOUR}->{COL}];
+ if ( $l[$dscFactCSV{DATE}->{COL}] ) {
+  $fdsh=$l[$dscFactCSV{HOUR}->{COL}];
+  my ($D,$M,$Y)=split(/,/,$l[$dscFactCSV{DATE}->{COL}]);
+  if ($M eq $Month) {
+   $fmbh=($D-1)*24+$fdsh;
+  } else {
+   my ($days,$hours,undef,undef) = Delta_DHMS($Year,$Month,1,0,0,0,2000+$Y,$M,$D,$fdsh,0,0);
+   $fmbh=$days*24+$hours;
+  }
  } else {
-  my ($days,$hours,undef,undef) = Delta_DHMS($Year,$Month,1,0,0,0,2000+$Y,$M,$D,$l[$dscFactCSV{HOUR}->{COL}],0,0);
-  $fmbh=$days*24+$hours;
+  $fmbh+=($l[$dscFactCSV{HOUR}->{COL}]-$fdsh);
+  $fdsh=$l[$dscFactCSV{HOUR}->{COL}];
  }
- 
  foreach my $lbl ( @mpidsFact ) {
   (my $v=$l[$dscFactCSV{$lbl}{COL}] ne ''?$l[$dscFactCSV{$lbl}{COL}]:undef)=~s%,%.%;
   if ( $dscFactCSV{$lbl}{CONV} ) {
@@ -161,11 +177,11 @@ close(FACT);
 my $FMBHours=0;
 
 my $outDir=OUT_BASE_DIR.'/'.$StationID.'/'.$Year.$Month;
-mkpath([ map { $outDir.'/'.$_ } (@mpidsOut,'xls') ]);
+#mkpath([ map { $outDir.'/'.$_ } (@mpidsOut,'xls') ]);
 my $predDir=PRED_BASE_DIR.'/'.$StationID.'/'.$Year.$Month;
 mkpath($predDir);
 
-#$DaysInMonth=1;
+#$DaysInMonth=3;
 for (my $Day=1; $Day<=$DaysInMonth; $Day++) {
  my $maxFMBH=min($FMBHours+$MAX_PRED_H,$maxFactFMBHours);
  my $Date=$Year.$Month.sprintf('%02g',$Day);
@@ -174,7 +190,7 @@ for (my $Day=1; $Day<=$DaysInMonth; $Day++) {
 #==<READ4POINTS>
  foreach my $mp (keys %MParLvls) {
   foreach my $lvl ( @{ $MParLvls{$mp} } ) {
-   for (my $predH=0; $predH<=$MAX_PRED_H; $predH+=3) {
+   for (my $predH=0; $predH<=$MAX_PRED_H; $predH+=$STEP_PRED_H) {
     my $mpid="${mp}-${lvl}";
     if ($predH eq 0 && index($csvNotInRA,"${mpid},")>=0 ) {
 # Remember: @cell is a GLOBALy-visible list!
@@ -200,7 +216,7 @@ for (my $Day=1; $Day<=$DaysInMonth; $Day++) {
   die "No label for ${mp}" unless (my $lbl=$MP2LBL{$mp}); 
   my ($mpid,$lvl)=($mp=~m/^(.+?)-(.+)$/);
   my @C; $C[$_]=$cell[$_]->{mpv}->{$mp} foreach 0..3;
-  for (my $predH=0; $predH<=$MAX_PRED_H; $predH+=3) {
+  for (my $predH=0; $predH<=$MAX_PRED_H; $predH+=$STEP_PRED_H) {
    my $R2=$C[0]->{$predH}+$kLon*($C[1]->{$predH} - $C[0]->{$predH});
    my $R1=$C[3]->{$predH}+$kLon*($C[2]->{$predH} - $C[3]->{$predH});
    my $R=$R1+$kLat*($R2-$R1);
@@ -214,7 +230,7 @@ for (my $Day=1; $Day<=$DaysInMonth; $Day++) {
 #==<DAYTMIMA>
  foreach my $fmbhDay ( map { $FMBHours+24*$_ } 0..($MAX_PRED_H/24-1) ) {
   foreach ('max','min') {
-   $pred{'dayT'.$_}->{$fmbhDay}=&$_(@{$pred{'T'.$_}}{(map { $fmbhDay+$_*3 } 1..8)});
+   $pred{'dayT'.$_}->{$fmbhDay}=&$_(@{$pred{'T'.$_}}{(map { $fmbhDay+$_*$STEP_PRED_H } 1..24/$STEP_PRED_H)});
   }
  } 
 #=<DAYTMIMA>
@@ -225,7 +241,7 @@ my $p_fmbh=$FMBHours;
 #foreach my $fmbh12 ( @t ) {
 foreach my $fmbh12 ( sort { $a<=>$b } grep { ($_>=$FMBHours) and ($_<=$maxFMBH) } keys %{$fact{APCP12}} ) {
  my $precp=0;
- for (my $fmbh=$p_fmbh+3; $fmbh<=$fmbh12; $fmbh+=3) {
+ for (my $fmbh=$p_fmbh+$STEP_PRED_H; $fmbh<=$fmbh12; $fmbh+=$STEP_PRED_H) {
   $precp+=$pred{APCP}{$fmbh};
  }
  $pred{APCP12}{$fmbh12}=nearest(0.01,$precp);
@@ -258,7 +274,7 @@ foreach my $fmbh12 ( sort { $a<=>$b } grep { ($_>=$FMBHours) and ($_<=$maxFMBH) 
 
 #==<OUTPRED> 
  my @mem=( 'FMBH;'.join(';',keys %pred) );
- for (my $fmbh=$FMBHours; $fmbh<=$FMBHours+$MAX_PRED_H; $fmbh+=3) {
+ for (my $fmbh=$FMBHours; $fmbh<=$FMBHours+$MAX_PRED_H; $fmbh+=$STEP_PRED_H) {
   push @mem,$fmbh.';'.(join ';', map { nearest(0.01,$pred{$_}{$fmbh}) } keys %pred);
  }
  
@@ -271,11 +287,14 @@ foreach my $fmbh12 ( sort { $a<=>$b } grep { ($_>=$FMBHours) and ($_<=$maxFMBH) 
 
 #==<DAY2COMP>
  foreach my $lbl (@mpidsOut) {
-  my ($F,$P,$C)=( $fact{$lbl}, $pred{$lbl}, {} );
+  my ($F,$P,$C,$D)=( $fact{$lbl}, $pred{$lbl}, {}, $diff{$lbl} );
   foreach my $fmbh ( grep { $F->{$_} ne undef } sort {$a <=> $b} keys %{$P} ) {
-   my ($fv,$pv,$y,$m,$d,$h)=($F->{$fmbh},$P->{$fmbh},fmbh2date($Year,$Month,$fmbh));   
-   $C->{$fmbh}=[$fmbh-$FMBHours,"${y}-${m}-${d}",$h,$fv,nearest(0.01,$pv),getFactPreDelta($lbl,$fv,$pv)];
+   my ($predH,$fv,$pv,$yy,$mm,$dd,$hh)=($fmbh-$FMBHours,$F->{$fmbh},$P->{$fmbh},fmbh2date($Year,$Month,$fmbh));
+   my $delta=getFactPreDelta($lbl,$fv,$pv);
+   $D->{$predH}+=$delta;
+   $C->{$fmbh}=[$predH,"${yy}-${mm}-${dd}",$hh,$fv,nearest(0.01,$pv),$delta];
   }
+  $diff{$lbl}=$D;
   $comp{$lbl}[$Day-1]=$C;
  }
 #==</DAY2COMP>
@@ -284,13 +303,14 @@ foreach my $fmbh12 ( sort { $a<=>$b } grep { ($_>=$FMBHours) and ($_<=$maxFMBH) 
 #=</DAYS>
 
 #=<OUTCMP>
+my %DiffID=('e'=>'System', 'a'=>'Absolute');
 foreach my $mp (keys %comp) {
  my $fileOut="${outDir}/${mp}-${Year}${Month}.xls";
- my $wb = Spreadsheet::WriteExcel->new($fileOut) || die "Cant create xls spreadsheet ${fileOut}: ".$!;
+ my $wb = Spreadsheet::WriteExcel->new($fileOut) || die "Cant create xls spreadsheet ${fileOut}: ".$!; 
+ my $boldStyle=$wb->add_format(bold=>1);
  for (my $Day=1; $Day<=@{$comp{$mp}}; $Day++) {
   my $sheet=$wb->add_worksheet($Day);
-  my ($row,$col)=(0,0);
-  
+  my ($row,$col)=(0,0);  
   $sheet->write($row, $col++, $_) foreach ('PREDH','DATE','+HOURS','FACT','PRED','DELTA');
   my $table=$comp{$mp}[$Day-1];
   foreach my $fmbh (sort { $a <=> $b } keys %{$table}) {
@@ -298,6 +318,32 @@ foreach my $mp (keys %comp) {
    $sheet->write($row, $col++, $_) foreach @{$table->{$fmbh}};
   } # FMBH
  } # Days
+ my %tblDiff;
+ my $predH=[ sort {$a<=>$b} keys %{$diff{$mp}} ];
+ my $l=@{$predH};
+ $tblDiff{$_}[0]=$predH foreach ('e','a');
+ foreach ( @{$predH} ) {
+  my $d=$diff{$mp}{$_};
+  $d/=$l;
+  push @{$tblDiff{'e'}->[1]},$d;
+  push @{$tblDiff{'a'}->[1]},abs($d);
+ }
+ foreach my $et ('e','a') {
+  my $sh=$wb->add_worksheet($et);
+  $sh->write('A1',[ ['PREDH'],['DELTA'] ],$boldStyle);
+  $sh->write('A2',$tblDiff{$et});
+  my $ch = $wb->add_chart( type => 'line', embedded => 1 );
+  $ch->add_series(
+         name       => $DiffID{$et}.' error / predict hours',
+         categories => '='.$et.'!$A$2:$A$42',
+         values     => '='.$et.'!$B$2:$B$42',
+                   );
+  $ch->set_x_axis( name => 'Hours of prediction' );
+  $ch->set_y_axis( name => $DiffID{$et}.' diff b/w fact and pred' );
+                       
+  $sh->insert_chart('C2',$ch,25,10,3,1);
+ }
+  
  $wb->close();
 } # Meteopars
 #=</OUTCMP>
