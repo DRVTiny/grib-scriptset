@@ -1,11 +1,11 @@
 sub dbgShowHsh {
  my ($H,$L,$K)=@_;
  if ($K ne undef) {
-  print 'FMBH;'.join(';',@{$K})."\n".$_.';'.join(';',@{$H->{$_}}{@{$K}})."\n" foreach @{$L};
+  print 'TSH;'.join(';',@{$K})."\n".$_.';'.join(';',@{$H->{$_}}{@{$K}})."\n" foreach @{$L};
  } else {
   foreach my $lbl ( @{$L} ) {
    my @t=sort { $a<=>$b } keys %{$H->{$lbl}};
-   print 'FMBH;'.join(';',@t)."\n".$lbl.';'.join(';',@{$H->{$lbl}}{@t})."\n";
+   print 'TSH;'.join(';',@t)."\n".$lbl.';'.join(';',@{$H->{$lbl}}{@t})."\n";
   }
  }
 }
@@ -29,6 +29,13 @@ sub cnvFactT {
 sub cnvFactPres {
  my $P=shift;
  return defined($P)?$P*100:undef;
+}
+
+sub tsh2date {
+ my $tsh=shift;
+ my @t=@{[localtime($tsh*3600)]}[5,4,3,2];
+ $t[0]+=1900; $t[1]++;
+ return ( map { sprintf('%02g',$_) } @t );
 }
 
 sub fmbh2date {
@@ -56,6 +63,35 @@ sub approx2grid {
            {lat=>$latDown,lon=>$lonRight},
            {lat=>$latDown,lon=>$lonLeft}
          );
+}
+
+sub Add_APCP12_To_Pred {
+ my ($fact,$pred,$tshBaseDay)=@_;
+ my $p_tsh=$tshBaseDay;
+ foreach my $tsh12 ( sort { $a<=>$b } grep { $_>=$tshBaseDay } keys %{$fact->{APCP12}} ) {
+  my $precp=0;
+  for (my $tsh=$p_tsh+$STEP_PRED_H; $tsh<=$tsh12; $tsh+=$STEP_PRED_H) {
+   $precp+=$pred->{APCP}{$tsh};
+  }
+  $pred->{APCP12}{$tsh12}=nearest(0.01,$precp);
+  $p_tsh=$tsh12;
+ }
+}
+
+sub outPred {
+ my ($pred,$lbls,$tshBaseDay,$maxPredH,$stepPredH,$predDir)=@_;
+ my $mode='standart';
+ my @mem=( 'PREDH;'.join(';',@{$lbls}) );
+ for (my $tsh=$tshBaseDay; $tsh<=$tshBaseDay+$maxPredH; $tsh+=$stepPredH) {
+  push @mem, ($tsh-$tshBaseDay).';'.(join ';', map { nearest(0.01,$pred->{$_}{$tsh}) } @{$lbls});
+ }
+ print "tshBaseDay=${tshBaseDay}:::".join( ';',@{[tsh2date($tshBaseDay)]}[0,1,2] ).":::\n";
+ open(PRED,'>',$predDir.'/'.join( '',@{[tsh2date($tshBaseDay)]}[0,1,2] )."_${mode}.csv");
+ print PRED join("\n", @mem);
+ close(PRED);
+ 
+ @mem=();
+ return 1;
 }
 
 return 1;
