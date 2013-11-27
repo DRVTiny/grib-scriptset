@@ -43,16 +43,15 @@ getLatestDay () {
 }
 getDateCmdArg () {
  if [[ $1 ]]; then
-  [[ $1 =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]] || {
-   echo "$slf: Unrecognized date passed to me, it must be in YYYY-MM-DD format" >&2
-   exit 1
+  [[ $1 =~ ^(20[0-9]{2})[-.]?([0-9]{2})[-.]?([0-9]{2})$ ]] || {
+   echo "${slf}.getDateCmdArg: Error: Unrecognized date passed to me, it must be in YYYY-MM-DD or YYYYMMDD format" >&2
+   return 1
   }
-  DATE="$1"
-  svIFS=$IFS; IFS='-'
-  y_m_d=($DATE)
+ # Save original formatting in DATE var
+  DATE=$1
+  y_m_d=(${BASH_REMATCH[@]:1:3})
   YM="${y_m_d[0]}${y_m_d[1]}"
-  IFS=$svIFS
-  YMD=${DATE//-/}
+  YMD="${YM}${y_m_d[2]}"
  else
  # We get parts of timestamp in UTC, because time in file names on FTP server is in UTC format
   YMD=$(getLatestDay) 

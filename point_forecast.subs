@@ -58,6 +58,11 @@ sub approx2grid {
   my $lonRight=$lonLeft+$GridStepLon;
   my $latDown=int($pLat/$GridStepLat)*$GridStepLat;
   my $latUp=$latDown+$GridStepLat;
+#  cell[] indexes (clockwise from up left point to down left one):
+#    0 --- 1
+#    |     |
+#    |     |
+#    3 --- 2
   return ( {lat=>$latUp,lon=>$lonLeft},
            {lat=>$latUp,lon=>$lonRight},
            {lat=>$latDown,lon=>$lonRight},
@@ -66,30 +71,72 @@ sub approx2grid {
 }
 
 sub Add_APCP12_To_Pred {
- my ($fact,$pred,$tshBaseDay)=@_;
- my $p_tsh=$tshBaseDay;
- foreach my $tsh12 ( sort { $a<=>$b } grep { $_>=$tshBaseDay } keys %{$fact->{APCP12}} ) {
+ my ($fact,$pred)=@_;
+ my @tshPred=sort { $a <=>$b } keys %{$pred->{'APCP'}};
+ my ($tshMin,$tshMax,$stepH)=($tshPred[0],$tshPred[-1],$tshPred[1]-$tshPred[0]);
+ my @tsh12s=grep { $fact->{'APCP12'}{$_} ne undef } @tshPred;
+ my $tshPtr=$tshMin-$stepH;
+
+ print "tsh12s;".join(';',@tsh12s)."\n";
+ print 'APCP12;'.join(';',map { $fact->{'APCP12'}{$_} } @tsh12s)."\n";
+ print "stepH=$stepH\n";
+# exit(0);
+
+ foreach my $tsh12 ( @tsh12s ) {
   my $precp=0;
-  for (my $tsh=$p_tsh+$STEP_PRED_H; $tsh<=$tsh12; $tsh+=$STEP_PRED_H) {
-   $precp+=$pred->{APCP}{$tsh};
+  for (my $tsh=$tshPtr+$stepH; $tsh<=$tsh12; $tsh+=$stepH) {
+   $precp+=$pred->{'APCP'}{$tsh};
   }
-  $pred->{APCP12}{$tsh12}=nearest(0.01,$precp);
-  $p_tsh=$tsh12;
+  $pred->{'APCP12'}{$tsh12}=nearest(0.01,$precp);
+  $tshPtr=$tsh12;
  }
+ return 1;
 }
 
 sub outPred {
- my ($pred,$lbls,$tshBaseDay,$maxPredH,$stepPredH,$predDir)=@_;
- my $mode='standart';
- my @mem=( 'PREDH;'.join(';',@{$lbls}) );
- for (my $tsh=$tshBaseDay; $tsh<=$tshBaseDay+$maxPredH; $tsh+=$stepPredH) {
-  push @mem, ($tsh-$tshBaseDay).';'.(join ';', map { nearest(0.01,$pred->{$_}{$tsh}) } @{$lbls});
- }
+ my ($pred,$lbls,$tshBaseDay,$predDir,$geo,$vs)=@_;
+ my @mpids=@{$lbls};
+ my @tsh=sort { $a<=>$b } keys %{$pred->{'PRES'}};
+ my $mode='V';
  print "tshBaseDay=${tshBaseDay}:::".join( ';',@{[tsh2date($tshBaseDay)]}[0,1,2] ).":::\n";
- open(PRED,'>',$predDir.'/'.join( '',@{[tsh2date($tshBaseDay)]}[0,1,2] )."_${mode}.csv");
- print PRED join("\n", @mem);
+
+ if ($vs) {
+  $mode=uc(substr($vs->{'Mode'},0,1)) if $vs->{'Mode'};
+  my $rx=$vs->{'rxExcl'};
+  @mpids=grep(!/${rx}/,@mpids) if $rx;
+ }
+ my @mem;
+ if ($mode eq 'V') {
+  $mem[0]=['PREDH',@mpids];
+  foreach my $tsh (@tsh) {
+   push @mem, [($tsh-$tshBaseDay), map { nearest(0.01,$pred->{$_}{$tsh}) } @mpids];
+  }
+ } elsif ($mode eq 'H') {
+  $mem[0]=['METEOPAR',map { $_-$tshBaseDay } @tsh];
+  foreach my $mp (@mpids) {
+   push @mem, [$mp,map { nearest(0.01,$pred->{$mp}{$_}) } @tsh];
+  }
+ }
+ my $Day=join( '',@{[tsh2date($tshBaseDay)]}[0,1,2] );
+ my $predFile="${predDir}/${Day}_".$geo->{'Lat'}.','.$geo->{'Lon'}."_${mode}";
+#=<XLS>
+ my $wb = Spreadsheet::WriteExcel->new($predFile.'.xls');
+ my $sh = $wb->add_worksheet($Day);
+ my $row=0;
+ foreach (@mem) {
+  my $col=0;
+  $sh->write($row,$col++,$_) foreach @{$_};
+  $row++;
+ }
+ $wb->close();
+#=</XLS>
+#=<CSV>
+ print "mpids: ".join(';',@mpids)."\ntsh: ".join(';',@tsh)."\n";
+ print "predFile=$predFile\n";
+ open(PRED,'>',$predFile.'.csv');
+ print PRED join("\n", map { join(';',@{$_}).';' } @mem);
  close(PRED);
- 
+#=</CSV>
  @mem=();
  return 1;
 }

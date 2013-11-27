@@ -17,7 +17,7 @@ while getopts 's: d: g: D: xT' key; do
 done
 shift $((OPTIND-1))
 
-getDateCmdArg $@
+getDateCmdArg $@ || exit 1
 
 csvPath="${csvPath:-$GFS_COOKED_CSV}/$DATE"
 grb2Path="${grb2Path:-$GFS_RAW_NAMOS}/$DATE"
@@ -31,7 +31,10 @@ fi
 [[ $GRID_BOUND ]]; (( flDontUseGridConv|=$? ))
 
 mkdir -p "$csvPath"
-cd       "$grb2Path"
+cd       "$grb2Path" || {
+ echo "$slf: Error: Cant cd to source path \"$grb2Path\", exiting" >&2
+ exit 1
+}
 
 
 $cmd < <({

@@ -2,7 +2,7 @@
 doShowUsage () {
  cat <<EOF
 Usage:
- ${slf[NAME]} [ -i DATA_ID ] [-d DEST_PATH ] [-e EMAIL_REPORT_TO ] [-m MODE=(standart|extended)] [-P PREDICT_HOURS] [ -T ] [-s] [-x]
+ ${slf[NAME]} [ -i DATA_ID ] [-d DEST_PATH ] [-e EMAIL_REPORT_TO ] [-a PointsFile ][-m MODE=(standart|extended)] [-P PREDICT_HOURS] [ -T ] [-s] [-x]
 EOF
  return 0
 }
@@ -31,7 +31,7 @@ TEMP_DIR='/tmp'
 nPredictHours=120
 pthStationsINI="$HOME/conf/areas.ini"
 
-while getopts 'yShxCTi: s: P: m: e: d: f: b:' k; do
+while getopts 'yShxCTi: s: P: m: e: d: f: b: a:' k; do
  case $k in
   h) doShowUsage; exit 0      ;;
   x) set -x                   ;;
@@ -48,11 +48,22 @@ while getopts 'yShxCTi: s: P: m: e: d: f: b:' k; do
   P) nPredictHours="$OPTARG"  ;;
   f) pthStationsINI="$OPTARG" ;;
   C) flRemoveCSV=1	      ;;
+  a) pthPointsFile="$OPTARG"  ;;
   y) (( $(fgrep processor /proc/cpuinfo | wc -l) > 1 )) && flParallelExec=1 ;;
   \?|*) doShowUsage; exit 1      ;;
  esac
 done
 shift $((OPTIND-1))
+
+if [[ -f $pthPointsFile ]]; then
+ while read -r l; do
+  IFS=';' fld=($l)
+  ed=$(date -d "$(date +%Y)${fld[0]##*.}${fld[0]%%.*}" +%Y%m%d)
+  sd=$(date -d "$ed -3 days" +%Y%m%d)
+  echo ./point_forecast.pl -b $sd -e $ed --view-mode h --view-excl 'WDIR,WIND,dayTmin,dayTmax,APCP12' --maxh 72 ${fld[1]},${fld[2]}
+ done <$pthPointsFile
+ exit 0
+fi
 
 [[ $mode ]] && { [[ $mode =~ (standart|extended) ]] || { 
  echo 'Mode must be "standart" or "extended"!'; doShowUsage; exit 1
@@ -96,6 +107,8 @@ if [[ -d $baseDir ]]; then
 else
  mkdir $baseDir
 fi
+
+
 
 if [[ $flTestOutCmds ]]; then
  cmd='cat -'
