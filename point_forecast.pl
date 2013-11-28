@@ -39,6 +39,45 @@ my %StaDim=( 'Rostov-On-Don'=>{lat=>47.3,lon=>39.8,alt=>75,area=>'rostov-on-don-
              'Kazanskaya'=>{lat=>49.8,lon=>41.2,alt=>72,area=>'rostov-on-don-short'},
              'Millerovo'=>{lat=>48.9,lon=>40.4,alt=>155,area=>'rostov-on-don-short'},
              'Konstantinovsk'=>{lat=>47.6,lon=>41.1,alt=>66,area=>'rostov-on-don-short'} );
+my %ConvFactVal=(
+ 'TIME' => undef,
+  'DATE' => undef,
+   'WDIR' => undef,
+    'WIND' => undef,
+     'GUST' => undef,
+      'CSNOW' => [ sub { return shift || 0; } ],
+       'CRAIN' => [ sub { return shift || 0; } ],
+        'T' => [ \&cnvFactT ],
+         'RH2m' => undef,
+          'PRES' => [ \&cnvFactPres ],
+           'dayTmin' => [ \&cnvFactT ],
+            'dayTmax' => [ \&cnvFactT ],
+             'APCP12' => undef
+);
+my %MPID2HEADF=(
+ 'TIME' => undef,
+  'DATE' => undef,
+   'WDIR' => undef,
+    'WIND' => undef,
+     'GUST' => undef,
+      'CSNOW' => [ 'SNOW' ],
+       'CRAIN' => [ 'RAIN' ],
+        'T' => [ 'TMP' ],
+         'RH2m' => [ 'R','RH' ],
+          'PRES' => [ 'P' ],
+           'dayTmin' => [ 'Tmin' ],
+            'dayTmax' => [ 'Tmax' ],
+             'APCP12' => undef
+);
+my %HEADF2MPID;
+foreach my $mpid (keys %MPID2HEADF) {
+ $HEADF2MPID{$mpid}=$mpid;
+ if ($MPID2HEADF{$mpid}) {
+  $HEADF2MPID{$_}=$mpid foreach @{ $MPID2HEADF{$mpid} };
+ }
+}
+my @mpidsFact= grep(!/(TIME|DATE)/, keys %ConvFactVal);
+
 #=</CONST>
 
 #=<SUBS>
@@ -78,24 +117,28 @@ $factDir=$opts->{'factdir'}?$opts->{'factdir'}:($flCompare?FACT_BASE_DIR:undef);
 #=</ARGS>
 
 #=<DATE>
-my ($curYear,$curMonth,$curDay,$DeltaDays,$tshStart,$tshEnd);
+my (%Start,%End,$DeltaDays);
 
 if ($dayStart) {
  my @DD=( [ $dayStart=~m/${YMD_REGEX}/ ], [ $dayEnd=~m/${YMD_REGEX}/ ] );
- ($curYear,$curMonth,$curDay)=@{$DD[0]};
+ @Start{'Year','Month','Day'}=@{$DD[0]};
+ @End{'Year','Month','Day'}=@{$DD[1]}; 
  $DeltaDays=1+Delta_Days($DD[0][0],$DD[0][1],$DD[0][2],$DD[1][0],$DD[1][1],$DD[1][2]);
  die "Start date must be earlier than end date" unless $DeltaDays>=0; 
 } else {
- ($curYear,$curMonth,$curDay)=($YearMonth=~m/^${YM_REGEX}/,1);
- $dayStart=$curYear.$curMonth.'01';
- $DeltaDays=Days_in_Month($curYear,$curMonth);
- $dayEnd=$curYear.$curMonth.$DeltaDays;
+ @Start{'Year','Month','Day'}=($YearMonth=~m/^${YM_REGEX}/,'01');
+ $DeltaDays=Days_in_Month($Start{'Year'},$Start{'Month'});
+ @End{'Year','Month','Day'}=(@Start{'Year','Month'},$DeltaDays);
 }
-my ($Year0,$Month0,$Day0)=($curYear,$curMonth,$curDay);
+my @D=(\%Start,\%End);
 # All timestamps with hour granularity, so TS(hours)=TS(POSIX, inseconds)/3600
-my $tshStart=timelocal(0,0,0,$curDay,$curMonth-1,$curYear)/3600;
+foreach (@D) {
+ $_->{'YM'}=$_->{'Year'}.$_->{'Month'};
+ $_->{'Date'}=$_->{'YM'}.$_->{'Day'};
+ $_->{'YMD'}=$_->{'Date'};
+ $_->{'TSH'}=timelocal(0,0,0,$_->{'Day'},$_->{'Month'}-1,$_->{'Year'})/3600;
+}
 #=</DATE>
-
 #=<NOTINRA>
 open(RAE,'<reanalyze_excl.inc');
 chomp ( @NotInRA = grep /\=3/,(<RAE>) );
@@ -188,49 +231,11 @@ while (my $StationID=shift) {
  #=</FILTERFILE>
 
  #=<FACT>
- my $maxFactTSH;
- my @mpidsOut;
+ my ($maxFactTSH,@mpidsOut);
  if ($factDir) {
-  my %ConvFactVal=(
-   'TIME' => undef,
-    'DATE' => undef,
-     'WDIR' => undef,
-      'WIND' => undef,
-       'GUST' => undef,
-        'CSNOW' => [ sub { return shift || 0; } ],
-         'CRAIN' => [ sub { return shift || 0; } ],
-          'T' => [ \&cnvFactT ],
-           'RH2m' => undef,
-            'PRES' => [ \&cnvFactPres ],
-             'dayTmin' => [ \&cnvFactT ],
-              'dayTmax' => [ \&cnvFactT ],
-               'APCP12' => undef
-  );
-  my %MPID2HEADF=(
-   'TIME' => undef,
-    'DATE' => undef,
-     'WDIR' => undef,
-      'WIND' => undef,
-       'GUST' => undef,
-        'CSNOW' => [ 'SNOW' ],
-         'CRAIN' => [ 'RAIN' ],
-          'T' => [ 'TMP' ],
-           'RH2m' => [ 'R','RH' ],
-            'PRES' => [ 'P' ],
-             'dayTmin' => [ 'Tmin' ],
-              'dayTmax' => [ 'Tmax' ],
-               'APCP12' => undef
-  );
-  my %HEADF2MPID;
-  foreach my $mpid (keys %MPID2HEADF) {
-   $HEADF2MPID{$mpid}=$mpid;
-   if ($MPID2HEADF{$mpid}) {
-    $HEADF2MPID{$_}=$mpid foreach @{ $MPID2HEADF{$mpid} };
-   }
-  }
-  my @mpidsFact= grep(!/(TIME|DATE)/, keys %ConvFactVal);
   @mpidsOut=grep { my $t=$_; grep { $t eq $_ } @mpidsFact } @LBLOrder;
-  my $factFile=$factDir."/${curYear}${curMonth}/${StationID}_${curYear}${curMonth}.csv";
+  my $factFile=$factDir.'/'.$Start{'YM'}.'/'.$geo{'StationID'}.'_'.$Start{'YM'}.'.csv';
+  $factFile=$factDir.'/'.$Start{'YM'}.'/'.$geo{'StationID'}.'.csv' unless  -f $factFile;
   open (FACT,'<',$factFile) || die "Cant open fact file ${factFile}: ".$!;
   
   my (@Col2Lbl,$j);
@@ -264,6 +269,7 @@ while (my $StationID=shift) {
   $maxFactTSH=$tsh;
   
   #my @t=sort {$a<=>$b} keys %{$fact{APCP12}};
+#  print "StationID=${StationID}\n";
 #  dbgShowHsh(\%fact,['APCP12','dayTmin','dayTmax']);
 #  exit(0);
 
@@ -272,19 +278,19 @@ while (my $StationID=shift) {
  #=</FACT>
 
  #=<LOOP.Days>
- my $tshBaseDay=$tshStart;
-
+ my $tshBaseDay=$Start{'TSH'};
+ my ($curYear,$curMonth,$curDay)=@Start{'Year','Month','Day'}; 
  my ($compDir,$predDir)=map { ( -d $_ ) || mkpath($_); $_ } (COMP_BASE_DIR.'/'.$geo{'StationID'},PRED_BASE_DIR.'/'.$geo{'StationID'});
- ($curMonth,$curDay)=map { sprintf('%02g',$_) } ($curMonth,$curDay);
+ 
  for (my $Day=1; $Day<=$DeltaDays; $Day++) {
   my $tshMax=$factDir?min($tshBaseDay+$MAX_PRED_H,$maxFactTSH):$tshBaseDay+$MAX_PRED_H;
   my @tshPred=map { ($_*$STEP_PRED_H)+$tshBaseDay } (0..($tshMax-$tshBaseDay)/$STEP_PRED_H);
   print "tshPred=".join(';',@tshPred)."\n";
-  my $Date=$curYear.sprintf('%02g',$curMonth).sprintf('%02g',$curDay);
-  my $srcDir=COOKED_BASE_DIR.'/'.$DATA_ID.'/'.$Date;
+  my $curDate=$curYear.sprintf('%02g',$curMonth).sprintf('%02g',$curDay);
+  my $srcDir=COOKED_BASE_DIR.'/'.$DATA_ID.'/'.$curDate;
  #==<PRED>
  #===<READ4POINTS>
-  print "READ4POINTS_${Date}\n";
+  print "READ4POINTS_${curDate}\n";
   foreach my $mp (keys %MParLvls) {
    foreach my $lvl ( @{ $MParLvls{$mp} } ) {
     for (my $predH=0; $predH<=$MAX_PRED_H; $predH+=$STEP_PRED_H) {
@@ -294,7 +300,7 @@ while (my $StationID=shift) {
       $_->{mpv}->{$mpid}->{0}=$_->{mpv}->{$mpid}->{24} foreach ( @cell );
       next;
      }
-     my $csvFile="$srcDir/gfs_4_${Date}_0000_".sprintf('%03g',$predH)."_${mp}-${lvl}.csv";
+     my $csvFile="$srcDir/gfs_4_${curDate}_0000_".sprintf('%03g',$predH)."_${mp}-${lvl}.csv";
      my $e='';     
      if ( ! -f $csvFile ) {
       ($csvFile,$e)=($csvFile.'.gz',':gzip') if -f $csvFile.'.gz';
@@ -313,7 +319,7 @@ while (my $StationID=shift) {
  #===</READ4POINTS>
 
  #===<IPOL2POINT>
-  print "IPOL2POINT_${Date}\n"; 
+  print "IPOL2POINT_${curDate}\n"; 
   my %pred;
   foreach my $mp (keys %{$cell[0]->{mpv}}) {
    die "No label for ${mp}" unless (my $lbl=$MP2LBL{$mp}); 
@@ -331,7 +337,7 @@ while (my $StationID=shift) {
  #===</IPOL2POINT>
 
  #===<WINDCALC> 
-  print "WINDCALC_${Date}\n";  
+  print "WINDCALC_${curDate}\n";  
   my $tsh=$tshBaseDay;
   foreach (0..$MAX_PRED_H/3) {  
    my ($U,$V)=( $pred{'U10m'}{$tsh}, $pred{'V10m'}{$tsh} );
@@ -344,7 +350,7 @@ while (my $StationID=shift) {
  #===</WINDCALC>
  
  #===<DAYTMIMA>
-  print "DAYTMIMA_${Date}\n";   
+  print "DAYTMIMA_${curDate}\n";   
   foreach my $tshDay ( map { $tshBaseDay+24*$_ } 0..($MAX_PRED_H/24-1) ) {
    foreach ('max','min') {
     $pred{'dayT'.$_}->{$tshDay}=&$_(@{$pred{'T'.$_}}{(map { $tshDay+$_*$STEP_PRED_H } 1..24/$STEP_PRED_H)});
@@ -355,18 +361,18 @@ while (my $StationID=shift) {
  #==</PRED>
  
  #==<SUMAPCP12>
-  print "APCP12_${Date}\n";
+  print "APCP12_${curDate}\n";
   Add_APCP12_To_Pred(\%fact,\%pred) if $factDir;
  #==</SUMAPCP12>
  
  #==<OUTPRED>
-  print "OUTPRED_${Date}\n";
+  print "OUTPRED_${curDate}\n";
   outPred(\%pred,\@LBLOrder,$tshBaseDay,$predDir,\%geo,\%ViewSettings) unless $factDir;
  #==</OUTPRED>
 
  #==<DAY2COMP>
   if ($factDir) {
-   print "DAY2COMP_${Date}\n";
+   print "DAY2COMP_${curDate}\n";
    print 'mpidsOut='.join(';',@mpidsOut)."\n";
    foreach my $lbl (@mpidsOut) {
     my ($F,$P,$C,$D)=( $fact{$lbl}, $pred{$lbl}, {}, $diff{$lbl} );
@@ -383,7 +389,7 @@ while (my $StationID=shift) {
    }
   }
  #==</DAY2COMP>
-  print "END_${Date}\n";
+  print "END_${curDate}\n";
   $tshBaseDay+=24;
   ($curYear,$curMonth,$curDay)=map { sprintf('%02g',$_) } Add_Delta_Days($curYear,$curMonth,$curDay,1);
  }
@@ -392,7 +398,7 @@ while (my $StationID=shift) {
  #=<OUTCMP>
  if ($factDir) {
   foreach my $mp (keys %comp) {
-   my $fileOut="${compDir}/${mp}_${dayStart}-${dayEnd}.xls";
+   my $fileOut="${compDir}/${mp}_".($YearMonth || $Start{'Date'}.'-'.$End{'Date'}).'.xls';
    my $wb = Spreadsheet::WriteExcel->new($fileOut) || die "Cant create xls spreadsheet ${fileOut}: ".$!; 
    my $boldStyle=$wb->add_format(bold=>1);
    for (my $Day=1; $Day<=@{$comp{$mp}}; $Day++) {
