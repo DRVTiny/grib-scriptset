@@ -1,47 +1,48 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -CDA
 use strict;
+use utf8;
 use Spreadsheet::WriteExcel;
-
+use Text::CSV::Easy qw( csv_parse );
 if (! @ARGV) {
-        print <<EOF;
-format:  csv2xls excelFileName commaSaperatedListOfCSVs [delimiter]
+ print <<EOF;
+format: csv2xls excelFileName ListOfCSVs [delimiter1 delimiter2]
 example: csv2xls example.xls sheet1.csv,sheet2.csv ":"
 EOF
-        exit(1);
+ exit(1);
 }
-
-my ($pthXLSFile, $lstCSVFiles, $delim) = @ARGV;
-$delim||=',';
-
-my @inCSV = split(/${delim}/, $lstCSVFiles);
+my ($pthXLSFile, $lstCSVFiles, $delim1, $delim2) = @ARGV;
+map { $_||=',' } $delim1, $delim2;
+my @inCSV = split /${delim1}/, $lstCSVFiles;
 my $wb = Spreadsheet::WriteExcel->new($pthXLSFile);
-
 for my $csv (@inCSV) {
-        my $idWorkSheet=undef;
-        if ($csv=~m/^(.+?):::(.+)$/) {
-         $csv=$1;
-         $idWorkSheet=$2;
-        }
-        
-        #print "Processing ${csv}...\n";
-        
-        ($idWorkSheet) = ($csv =~ m%^(?:/?(?:[^/]+/)*)?([^/]+)\.[^\.]+$%) unless $idWorkSheet ne undef;
-        next unless $idWorkSheet ne undef;
-        open (CSV, $csv) || die ("Could not open source file ${csv}!");
-        my $sh = $wb->add_worksheet($idWorkSheet);
-        
-        my $row = 0;
-        while (<CSV>) {
-                my $col = 0;
-                my @entries=split /${delim}/;
-                for (@entries) {
-                        $sh->write($row, $col, $_);
-                        $col++;
-                }
-                $row++;
-        }
-        
-        close (CSV);
+ my $idWorkSheet=undef;
+ if ($csv=~m/^(.+?):::(.+)$/) {
+  $csv=$1;
+  $idWorkSheet=$2;
+ }
+#print "Processing ${csv}...\n";
+ ($idWorkSheet) = ($csv =~ m%^(?:/?(?:[^/]+/)*)?([^/]+)\.[^\.]+$%) if $idWorkSheet eq undef;
+ next if $idWorkSheet eq undef;
+ $idWorkSheet=substr($idWorkSheet,0,27).'...' if length($idWorkSheet)>=31;
+ open (CSV, $csv) || die ("Could not open source file ${csv}!");
+ my $sh = $wb->add_worksheet($idWorkSheet);
+ my ($row,$maxColN) =(0,0);
+ my @maxl;
+ while (<CSV>) {
+  my $col = 0;
+  my @entries;
+  die "Cant parse line #${row} at $csv" unless eval { @entries=csv_parse($_) };
+  foreach (@entries) {
+   $sh->write($row, $col, $_);
+   $maxl[$col]=length($_) if length($_)>$maxl[$col];
+   $col++;
+  }
+  $maxColN=$col-1 if ($col-1)>$maxColN;
+  $row++;
+ }
+ for (my $col=0; $col<=$maxColN; $col++) {
+  $sh->set_column($col,$col,$maxl[$col]);
+ }
+ close (CSV);
 }
-
 $wb->close();
